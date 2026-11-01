@@ -1,0 +1,90 @@
+<?php
+
+namespace App\Services;
+
+use App\Mail\IntegrationAlertMail;
+use App\Models\Client;
+use App\Models\Integration;
+use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
+use App\Services\Analysis\RuleEngine;
+use App\Services\Connectors\Ga4Connector;
+use App\Services\Connectors\GoogleAdsConnector;
+use App\Services\Connectors\MetaConnector;
+use App\Services\Connectors\MetricsWriter;
+use App\Services\Demo\DemoDataGenerator;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+/** Pobiera dane ze wszystkich podłączonych źródeł, a potem uruchamia silnik reguł. */
+class ClientSync
+{
+    public function __construct(
+        private GoogleAdsConnector $googleAds,
+        private Ga4Connector $ga4,
+        private MetaConnector $meta,
+        private RuleEngine $engine,
+    ) {}
+
+    public function sync(Client $client): array
+    {
+        $log = [];
+
+        if ($client->is_demo) {
+            (new DemoDataGenerator)->generate($client);
+            $client->integrations()->update(['last_synced_at' => now(), 'last_error' => null]);
+            $log[] = 'Dane demo wygenerowane ponownie.';
+        } else {
+            $to = now()->subDay()->toDateString();
+            $from = now()->subDays(config('adpilot.sync_lookback_days'))->toDateString();
+            $writer = new MetricsWriter($client);
+
+            foreach ($client->integrations()->where('status', 'connected')->get() as $integration) {
+                try {
+                    if ($integration->provider === 'google') {
+                        if ($integration->setting('customer_id')) {
+                            $this->googleAds->sync($integration, $writer, $from, $to);
+                            $log[] = 'Google Ads: OK';
+                        }
+                        if ($integration->setting('ga4_property_id')) {
+                            $this->ga4->sync($integration, $writer, $from, $to);
+                            $log[] = 'GA4: OK';
+                        }
+                    } elseif ($integration->provider === 'meta') {
+                        $this->meta->sync($integration, $writer, $from, $to);
+                        $log[] = 'Meta Ads: OK';
+                    }
+                    $integration->update(['last_synced_at' => now(), 'last_error' => null, 'alerted_at' => null]);
+                } catch (Throwable $e) {
+                    Log::warning("Sync {$integration->provider} klienta {$client->id}: ".$e->getMessage());
+                    $integration->update(['last_error' => mb_substr($e->getMessage(), 0, 1000)]);
+                    $this->alert($integration);
+                    $log[] = ucfirst($integration->provider).': BŁĄD – '.$e->getMessage();
+                }
+            }
+        }
+
+        $stats = $this->engine->run($client);
+        $log[] = "Rekomendacje: {$stats['new']} nowych, {$stats['updated']} zaktualizowanych, {$stats['resolved']} rozwiązanych.";
+
+        return $log;
+    }
+
+    /** E-mail do administratorów – maks. raz na dobę dla danej integracji. */
+    private function alert(Integration $integration): void
+    {
+        if ($integration->alerted_at && $integration->alerted_at->gt(now()->subDay())) {
+            return;
+        }
+        $to = User::where('is_admin', true)->pluck('email')->all() ?: array_filter([Setting::brand()['email']]);
+        if ($to) {
+            try {
+                Mail::to($to)->send(new IntegrationAlertMail($integration->load('client')));
+                $integration->update(['alerted_at' => now()]);
+            } catch (Throwable $e) {
+                Log::warning('Alert integracji nie wysłany: '.$e->getMessage());
+            }
+        }
+    }
+}

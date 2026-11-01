@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Jobs\GenerateReportJob;
+use App\Mail\ReportReadyMail;
+use App\Models\Client;
+use App\Models\Report;
+use App\Models\Setting;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
+
+class ReportController extends Controller
+{
+    public function index(Client $client)
+    {
+        return Inertia::render('clients/reports', [
+            'client' => app(ClientController::class)->clientProps($client),
+            'reports' => $client->reports()->latest()->get(['id', 'type', 'period_start', 'period_end', 'ai_model', 'sent_at', 'created_at'])
+                ->map(fn ($r) => [...$r->toArray(), 'public_url' => route('public.report', [$client->report_token, $r]), 'pdf_url' => route('public.report.pdf', [$client->report_token, $r])]),
+            'defaults' => [
+                'from' => now()->subMonthNoOverflow()->startOfMonth()->toDateString(),
+                'to' => now()->subMonthNoOverflow()->endOfMonth()->toDateString(),
+            ],
+            'ai_enabled' => filled(config('adpilot.ai.api_key')),
+        ]);
+    }
+
+    public function store(Request $request, Client $client)
+    {
+        $data = $request->validate([
+            'type' => 'required|in:client,internal',
+            'from' => 'required|date',
+            'to' => 'required|date|after_or_equal:from',
+            'send' => 'boolean',
+        ]);
+        GenerateReportJob::dispatch($client, $data['type'], $data['from'], $data['to'], (bool) ($data['send'] ?? false));
+
+        return back()->with('success', 'Raport jest generowany (z komentarzem AI może to potrwać do minuty). Odśwież listę za chwilę.');
+    }
+
+    public function show(Report $report)
+    {
+        $client = $report->client;
+
+        return Inertia::render('reports/show', [
+            'client' => app(ClientController::class)->clientProps($client),
+            'report' => $report,
+            'summary_html' => $report->ai_summary ? Str::markdown($report->ai_summary, ['html_input' => 'strip']) : null,
+            'public_url' => route('public.report', [$client->report_token, $report]),
+            'pdf_url' => route('public.report.pdf', [$client->report_token, $report]),
+        ]);
+    }
+
+    public function updateNote(Request $request, Report $report)
+    {
+        $report->update($request->validate(['note' => 'nullable|string|max:5000']));
+
+        return back()->with('success', 'Zapisano notatkę – pojawi się w raporcie dla klienta.');
+    }
+
+    public function send(Report $report)
+    {
+        $client = $report->client;
+        if (! $client->contact_email) {
+            return back()->with('error', 'Uzupełnij e-mail kontaktowy klienta.');
+        }
+        Mail::to($client->contact_email)->send(new ReportReadyMail($report));
+        $report->update(['sent_at' => now()]);
+
+        return back()->with('success', "Raport wysłany na {$client->contact_email}.");
+    }
+
+    public function destroy(Report $report)
+    {
+        $client = $report->client;
+        $report->delete();
+
+        return redirect()->route('clients.reports', $client)->with('success', 'Raport usunięty.');
+    }
+
+    // ---------------------------------------------------------------- publiczny raport dla klienta
+
+    public function public(string $token, Report $report)
+    {
+        $this->authorizePublic($token, $report);
+
+        return view('reports.client', $this->viewData($report, false));
+    }
+
+    public function pdf(string $token, Report $report)
+    {
+        $this->authorizePublic($token, $report);
+        $name = Str::slug($report->client->name).'-raport-'.$report->period_start->format('Y-m').'.pdf';
+
+        return Pdf::loadView('reports.client', $this->viewData($report, true))->setPaper('a4')->download($name);
+    }
+
+    private function authorizePublic(string $token, Report $report): void
+    {
+        abort_unless(hash_equals($report->client->report_token, $token) && $report->type === 'client', 404);
+    }
+
+    private function viewData(Report $report, bool $pdf): array
+    {
+        return [
+            'report' => $report,
+            'd' => $report->data,
+            'summary' => $report->ai_summary ? Str::markdown($report->ai_summary, ['html_input' => 'strip']) : null,
+            'pdf' => $pdf,
+            'agency' => Setting::brand()['name'],
+            'brand' => Setting::brand(),
+            'pdfUrl' => $pdf ? null : route('public.report.pdf', [$report->client->report_token, $report]),
+        ];
+    }
+}

@@ -1,0 +1,63 @@
+# AdPilot – produkcja na VPS
+# Uruchomienie: docker compose up -d --build
+# HTTPS: postaw przed tym Caddy / Nginx Proxy Manager / Traefik albo użyj certbota na hoście (port 8080 → 443).
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    target: app
+  image: adpilot-app
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - storage:/var/www/html/storage
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  app:
+    <<: *app
+
+  # Kolejka: synchronizacje, audyty, raporty AI, wysyłka e-maili
+  worker:
+    <<: *app
+    command: php artisan queue:work --sleep=3 --tries=2 --timeout=900 --max-time=3600
+
+  # Harmonogram: codzienna synchronizacja, cotygodniowy audyt, raporty miesięczne
+  scheduler:
+    <<: *app
+    command: php artisan schedule:work
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: web
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - storage:/var/www/html/storage:ro
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-adpilot}
+      MYSQL_USER: ${DB_USERNAME:-adpilot}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      retries: 10
+
+volumes:
+  storage:
+  dbdata:
