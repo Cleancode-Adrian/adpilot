@@ -5,6 +5,11 @@
 
     RewriteEngine On
 
+    # Prywatny panel: blokada botów AI i wyszukiwarek (robots.txt zostaje dostępny)
+    RewriteCond %{REQUEST_URI} !^/robots\.txt$
+    RewriteCond %{HTTP_USER_AGENT} (gptbot|chatgpt-user|oai-searchbot|claudebot|claude-user|claude-searchbot|claude-web|anthropic-ai|google-extended|googleother|applebot|perplexity|ccbot|bytespider|meta-external|facebookbot|amazonbot|cohere|diffbot|youbot|mistralai|duckassistbot|imagesiftbot|omgilibot|timpibot|googlebot|bingbot|yandex|baiduspider|duckduckbot|petalbot|seznambot|ahrefsbot|semrushbot|mj12bot|dotbot|dataforseobot|blexbot) [NC]
+    RewriteRule ^ - [F,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -18,4 +23,20 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+# Zakaz indeksowania i wykorzystania przez AI – także dla plików statycznych (CSS, JS, logo)
+<IfModule mod_headers.c>
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Długi cache dla zbudowanych plików frontendu (mają hash w nazwie)
+<IfModule mod_expires.c>
+    <If "%{REQUEST_URI} =~ m#^/build/#">
+        ExpiresActive On
+        ExpiresDefault "access plus 1 year"
+    </If>
 </IfModule>
