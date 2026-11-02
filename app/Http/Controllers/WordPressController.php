@@ -41,6 +41,7 @@ class WordPressController extends Controller
                 ->when($filter === 'all', fn ($q) => $q)
                 ->latest('occurred_at')->latest('id')->limit(200)->get() : [],
             'eventFilter' => $filter,
+            'latestConnector' => preg_match("/const VERSION = '([^']+)'/", (string) @file_get_contents(resource_path('wordpress/cc-connector/cc-connector.php')), $m) ? $m[1] : null,
             'alertCount' => $client->wpEvents()->alerts()->count(),
         ]);
     }
@@ -105,14 +106,14 @@ class WordPressController extends Controller
     {
         $event->update(['acknowledged_at' => now(), 'acknowledged_by' => $request->user()->id]);
 
-        return back();
+        return $request->expectsJson() ? response()->json(['ok' => true]) : back();
     }
 
     public function acknowledgeAll(Request $request, Client $client)
     {
         $n = $client->wpEvents()->whereNull('acknowledged_at')->update(['acknowledged_at' => now(), 'acknowledged_by' => $request->user()->id]);
 
-        return back()->with('success', "Oznaczono $n zdarzeń jako sprawdzone.");
+        return $request->expectsJson() ? response()->json(['ok' => true, 'count' => $n]) : back()->with('success', "Oznaczono $n zdarzeń jako sprawdzone.");
     }
 
     // ------------------------------------------------------------------ API dla wtyczki

@@ -101,6 +101,8 @@ class WordPressMonitorTest extends TestCase
         $this->assertSame('warning', $types['scan_files_changed']);
         $this->assertContains('wp-content/uploads/2026/11/shell.php', WpEvent::firstWhere('type', 'scan_uploads_php')->details['files']);
         $this->assertContains('index.php', WpEvent::firstWhere('type', 'scan_core_modified')->details['files']);
+        $this->assertSame(['index.php'], WpEvent::firstWhere('type', 'scan_core_modified')->details['files'], 'polski version.php to nie zmiana');
+        $this->assertSame(['wp-content/uploads/2026/11/shell.php'], WpEvent::firstWhere('type', 'scan_uploads_php')->details['files'], 'pusty index.php w uploads to nie zagrożenie');
 
         // 3) zdarzenia na żywo: nowy admin, edycja kodu, logowanie
         $events = $this->plugin($site, 'events');
@@ -226,5 +228,18 @@ class WordPressMonitorTest extends TestCase
         $this->assertSame(1, app(WpMonitor::class)->checkOffline());
         $this->assertSame(0, app(WpMonitor::class)->checkOffline());
         $this->assertSame('warning', WpEvent::firstWhere('type', 'site_offline')->severity);
+    }
+
+    public function test_single_event_acknowledge_hides_it_from_alerts(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $site = $this->site();
+        $e = app(WpMonitor::class)->createEvent($site, 'scan_files_changed', 'warning', 'Zmiany', ['files' => ['a.php']]);
+
+        $this->from("/clients/{$site->client_id}/wordpress")
+            ->post("/wp-events/{$e->id}/ack", [], ['X-Inertia' => 'true'])
+            ->assertRedirect("/clients/{$site->client_id}/wordpress");
+        $this->assertNotNull($e->fresh()->acknowledged_at);
+        $this->get("/clients/{$site->client_id}/wordpress")->assertInertia(fn ($p) => $p->has('events', 0)->where('alertCount', 0));
     }
 }

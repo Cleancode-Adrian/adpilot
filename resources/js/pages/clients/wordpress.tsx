@@ -1,5 +1,5 @@
 import { Section } from '@/components/adpilot/ui';
-import { CopyButton } from '@/components/adpilot/vault';
+import { CopyButton, postJson } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
 import ClientLayout from '@/layouts/client-layout';
 import { date, dateTime } from '@/lib/format';
@@ -146,8 +146,25 @@ const DETAIL_LABELS: Record<string, string> = {
     last_login_tried: 'Ostatni login próby',
 };
 
-function EventRow({ e }: { e: WpEvent }) {
+function EventRow({ e, hideAcknowledged }: { e: WpEvent; hideAcknowledged: boolean }) {
     const [open, setOpen] = useState(false);
+    const [acked, setAcked] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // od razu znika z listy; serwer zapisuje w tle, błąd pokazujemy w wierszu (bez okna z kodem)
+    const acknowledge = async () => {
+        setAcked(true);
+        setError(null);
+        try {
+            const res = await postJson(`/wp-events/${e.id}/ack`);
+            if (!res.ok) throw new Error(res.status === 419 ? 'sesja wygasła – odśwież stronę (F5)' : `błąd serwera ${res.status}`);
+            router.reload({ only: ['alertCount', 'client', 'wp_alerts'] });
+        } catch (err) {
+            setAcked(false);
+            setError(`Nie zapisano: ${err instanceof Error ? err.message : 'brak połączenia'}`);
+        }
+    };
+    if (acked && hideAcknowledged) return null;
     const s = SEVERITY[e.severity];
     const d = e.details ?? {};
     const files = (['files', 'changed', 'added', 'removed'] as const).flatMap((k) =>
@@ -173,17 +190,13 @@ function EventRow({ e }: { e: WpEvent }) {
                 {(scalars.length > 0 || files.length > 0 || d.hint) && (
                     <ChevronDown className={cn('mt-1 size-4 shrink-0 opacity-50 transition', !open && '-rotate-90')} onClick={() => setOpen(!open)} />
                 )}
-                {!e.acknowledged_at && e.severity !== 'info' && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7"
-                        onClick={() => router.post(`/wp-events/${e.id}/ack`, {}, { preserveScroll: true })}
-                    >
+                {!e.acknowledged_at && !acked && e.severity !== 'info' && (
+                    <Button variant="outline" size="sm" className="h-7" onClick={acknowledge}>
                         <CheckCircle2 className="size-3.5" /> Sprawdzone
                     </Button>
                 )}
             </div>
+            {error && <p className="mt-1 text-xs font-medium text-[#b42f2f] dark:text-[#f08080]">{error}</p>}
             {open && (
                 <div className="mt-2 space-y-2 pl-1 text-xs">
                     {d.hint && <p className="text-muted-foreground">{String(d.hint)}</p>}
@@ -319,6 +332,7 @@ export default function WordPress({
     connectionKey: keyValue,
     events,
     eventFilter,
+    latestConnector,
     alertCount,
 }: {
     client: ClientProps;
@@ -326,6 +340,7 @@ export default function WordPress({
     connectionKey: string | null;
     events: WpEvent[];
     eventFilter: string;
+    latestConnector: string | null;
     alertCount: number;
 }) {
     const { admin } = usePage<SharedData>().props;
@@ -353,6 +368,7 @@ export default function WordPress({
         ? scan.core_modified_count + scan.core_unknown_count + scan.uploads_php_count + (scan.baseline ? 0 : scan.added_count + scan.changed_count)
         : 0;
     const updates = site.plugin_updates.length + site.theme_updates.length + (r.wp_update ? 1 : 0);
+    const outdated = !!latestConnector && !!r.connector && r.connector.localeCompare(latestConnector, undefined, { numeric: true }) < 0;
     const stale = site.last_seen_at && Date.now() - new Date(site.last_seen_at).getTime() > 36 * 3600_000;
 
     return (
@@ -407,6 +423,23 @@ export default function WordPress({
                     )}
                 </div>
             </div>
+
+            {outdated && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm">
+                    <AlertTriangle className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                    <span className="flex-1">
+                        Na stronie działa CC Connector <strong>{r.connector}</strong>, dostępna jest wersja <strong>{latestConnector}</strong>.
+                        Pobierz plik i podmień go w wp-content/mu-plugins/ (przez FTP).
+                    </span>
+                    {admin && (
+                        <Button size="sm" variant="outline" asChild>
+                            <a href={`${base}/wordpress/download`}>
+                                <Download className="size-4" /> Pobierz nową wersję
+                            </a>
+                        </Button>
+                    )}
+                </div>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <Tile label="WordPress" value={r.wp_version}>
@@ -480,7 +513,16 @@ export default function WordPress({
                                         variant="outline"
                                         size="sm"
                                         className="h-8"
-                                        onClick={() => router.post(`${base}/wordpress/ack-all`, {}, { preserveScroll: true })}
+                                        onClick={async () => {
+                                            const res = await postJson(`${base}/wordpress/ack-all`);
+                                            if (res.ok) router.reload();
+                                            else
+                                                alert(
+                                                    res.status === 419
+                                                        ? 'Sesja wygasła – odśwież stronę (F5).'
+                                                        : `Nie zapisano (błąd serwera ${res.status}).`,
+                                                );
+                                        }}
                                     >
                                         <CheckCircle2 className="size-4" /> Wszystkie sprawdzone
                                     </Button>
@@ -493,7 +535,7 @@ export default function WordPress({
                         ) : (
                             <ul className="grid gap-2">
                                 {events.map((e) => (
-                                    <EventRow key={e.id} e={e} />
+                                    <EventRow key={e.id} e={e} hideAcknowledged={eventFilter === 'alerts'} />
                                 ))}
                             </ul>
                         )}

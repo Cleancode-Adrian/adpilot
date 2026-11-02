@@ -39,6 +39,22 @@ export const CATEGORY_META: Record<string, { url: string; urlPlaceholder: string
  * Odczyt hasła – POST z tokenem CSRF. 423 = minęły 3 h od potwierdzenia hasła do panelu:
  * przechodzimy przez /vault/unlock, które po potwierdzeniu wraca na bieżącą stronę.
  */
+/** POST JSON z tokenem CSRF (fetch – bez okna błędu Inertii). */
+export async function postJson(url: string, body?: unknown): Promise<Response> {
+    const xsrf = decodeURIComponent(
+        document.cookie
+            .split('; ')
+            .find((c) => c.startsWith('XSRF-TOKEN='))
+            ?.split('=')[1] ?? '',
+    );
+    return fetch(url, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf, 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+}
+
 export async function reveal(id: number): Promise<{ secret: string | null; notes: string | null }> {
     const xsrf = decodeURIComponent(
         document.cookie

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       CC Connector
  * Description:       Łączy stronę z panelem opieki CleanCode AS: wersje WordPress i PHP, aktualizacje wtyczek i motywów, administratorzy, monitoring zmian w plikach i ważnych zdarzeń.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 5.3
  * Requires PHP:      7.2
  * Author:            CleanCode AS
@@ -23,7 +23,7 @@ if (! defined('ABSPATH')) {
 
 final class CC_Connector
 {
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
     /** Klucz wbudowany przy pobieraniu z panelu (wersja mu-plugin). Puste = klucz z ustawień lub stałej CC_CONNECTOR_KEY. */
     const EMBEDDED_KEY = '';
     const OPT_KEY = 'cc_connector_key';
@@ -405,7 +405,7 @@ final class CC_Connector
         @set_time_limit(300);
         require_once ABSPATH . 'wp-admin/includes/update.php';
         $started = microtime(true);
-        $result = array('core_modified' => array(), 'core_unknown' => array(), 'uploads_php' => array(), 'added' => array(), 'changed' => array(), 'removed' => array(), 'baseline' => false);
+        $result = array('core_modified' => array(), 'core_unknown' => array(), 'uploads_php' => array(), 'added' => array(), 'changed' => array(), 'removed' => array(), 'baseline' => false, 'uploads_silent' => 0);
 
         // 1) rdzeń
         $checksums = function_exists('get_core_checksums') ? get_core_checksums($wp_version, get_locale() ?: 'en_US') : false;
@@ -418,6 +418,10 @@ final class CC_Connector
                     continue;
                 }
                 $path = ABSPATH . $file;
+                // wersje językowe (np. pl_PL) mają w version.php dopisek $wp_local_package – to nie jest zmiana
+                if ($file === 'wp-includes/version.php' && is_file($path) && strpos((string) file_get_contents($path), '$wp_local_package') !== false) {
+                    continue;
+                }
                 if (is_file($path) && md5_file($path) !== $md5) {
                     $result['core_modified'][] = $file;
                 }
@@ -444,6 +448,10 @@ final class CC_Connector
         $uploads = wp_upload_dir(null, false);
         if (! empty($uploads['basedir']) && is_dir($uploads['basedir'])) {
             foreach (self::files($uploads['basedir'], array('php', 'phtml', 'phar', 'php5', 'php7', 'phps')) as $path) {
+                if (self::is_silent_php($path)) {
+                    $result['uploads_silent']++;
+                    continue; // puste index.php („Silence is golden”) – wtyczki blokują nimi listowanie katalogów
+                }
                 $result['uploads_php'][] = self::rel($path, ABSPATH);
             }
         }
@@ -563,6 +571,20 @@ final class CC_Connector
         }
 
         return $out;
+    }
+
+    /** Plik PHP bez żadnego kodu – tylko znacznik otwierający i komentarze. */
+    private static function is_silent_php($path)
+    {
+        if (@filesize($path) > 1024) {
+            return false;
+        }
+        $code = (string) @file_get_contents($path);
+        $code = preg_replace('#/\*.*?\*/#s', '', $code);
+        $code = preg_replace('#(//|\#)[^\r\n]*#', '', $code);
+        $code = str_replace(array('<?php', '<?', '?>'), '', $code);
+
+        return trim($code) === '';
     }
 
     private static function rel($path, $base)

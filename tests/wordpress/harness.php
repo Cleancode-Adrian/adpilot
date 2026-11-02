@@ -27,7 +27,10 @@ foreach (['wp-admin/includes/plugin.php', 'wp-admin/includes/update.php', 'wp-ad
     file_put_contents($root . $f, "<?php\n");
 }
 file_put_contents($root . 'wp-admin/index.php', "<?php // core\n");
-file_put_contents($root . 'wp-includes/version.php', "<?php // core\n");
+// polska wersja WordPressa: version.php z dopiskiem $wp_local_package – inny skrót niż oficjalny en_US
+file_put_contents($root . 'wp-includes/version.php', "<?php // core\n\$wp_local_package = 'pl_PL';\n");
+// nieszkodliwy pusty index.php w uploads (tworzą je wtyczki)
+file_put_contents($root . 'wp-content/uploads/index.php', "<?php\n// Silence is golden.\n");
 file_put_contents($root . 'index.php', "<?php // core\n");
 if (! is_file($root . 'wp-config.php')) {
     file_put_contents($root . 'wp-config.php', "<?php // config\n");
