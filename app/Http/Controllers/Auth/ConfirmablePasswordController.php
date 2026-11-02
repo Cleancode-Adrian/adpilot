@@ -39,6 +39,6 @@ class ConfirmablePasswordController extends Controller
         RateLimiter::clear($key);
         $request->session()->put('auth.password_confirmed_at', time());
 
-        return redirect()->intended(route('clients.index', absolute: false));
+        return redirect()->intended(route('clients.index', absolute: false))->with('success', 'Potwierdzono. Jeśli czynność się nie wykonała – kliknij jeszcze raz.');
     }
 }

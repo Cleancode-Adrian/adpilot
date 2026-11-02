@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->alias([
             'vault.unlocked' => \App\Http\Middleware\EnsureVaultUnlocked::class,
+            'password.confirm' => \App\Http\Middleware\RequirePassword::class,
         ]);
         $middleware->web(append: [
             HandleInertiaRequests::class,

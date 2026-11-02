@@ -239,4 +239,29 @@ class SecurityTest extends TestCase
         $this->assertSame('nowy@example.com', $user->fresh()->email);
         Mail::assertSent(SecurityAlertMail::class, fn ($m) => $m->hasTo('stary@example.com'));
     }
+
+    /** Dokładnie ścieżka z produkcji: admin bez 2FA, wymóg włączony, klika „Włącz”, potwierdza hasło. */
+    public function test_admin_without_2fa_can_enable_it_through_password_confirmation(): void
+    {
+        config(['adpilot.security.require_2fa' => true]);
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->actingAs($admin);
+
+        // klik „Włącz” → potwierdzenie hasła (nie pętla do ustawień)
+        $this->from('/settings/security')->post('/settings/security/two-factor')->assertRedirect(route('password.confirm'));
+        $this->get('/confirm-password')->assertOk();
+
+        // potwierdzenie → powrót na stronę bezpieczeństwa (nie pod adres akcji)
+        $this->post('/confirm-password', ['password' => 'password'])->assertRedirect('/settings/security');
+
+        // ponowny klik – już działa
+        $this->from('/settings/security')->post('/settings/security/two-factor')->assertRedirect('/settings/security');
+        $secret = session('two_factor.setup_secret');
+        $this->assertNotEmpty($secret);
+        $this->post('/settings/security/two-factor/confirm', ['code' => $this->codeAt($secret)])->assertSessionHas('two_factor.recovery_codes');
+        $this->assertTrue($admin->fresh()->two_factor_enabled);
+
+        // od teraz panel jest dostępny
+        $this->get('/clients')->assertOk();
+    }
 }

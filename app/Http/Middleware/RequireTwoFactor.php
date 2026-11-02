@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class RequireTwoFactor
 {
-    private const ALLOWED = ['security.*', 'logout', 'password.confirm', 'two-factor.*', 'verification.*'];
+    private const ALLOWED = ['security.*', 'logout', 'password.confirm', 'password.confirm.store', 'two-factor.*', 'verification.*'];
 
     public function handle(Request $request, Closure $next): Response
     {
