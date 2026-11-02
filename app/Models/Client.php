@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 class Client extends Model
 {
     protected $fillable = [
-        'name', 'website_url', 'has_ads', 'has_care', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
+        'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
         'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at',
     ];
 
@@ -21,6 +21,7 @@ class Client extends Model
         return [
             'has_ads' => 'boolean',
             'has_care' => 'boolean',
+            'has_general' => 'boolean',
             'target_roas' => 'float',
             'target_cpa' => 'float',
             'monthly_budget' => 'float',

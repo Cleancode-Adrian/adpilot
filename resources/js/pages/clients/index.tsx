@@ -7,7 +7,20 @@ import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { type CareSummary } from '@/types/adpilot';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlarmClock, Archive, FlaskConical, KeyRound, ListChecks, LogIn, Megaphone, Phone, PlusCircle, Search, ShieldCheck } from 'lucide-react';
+import {
+    AlarmClock,
+    Archive,
+    Briefcase,
+    FlaskConical,
+    KeyRound,
+    ListChecks,
+    LogIn,
+    Megaphone,
+    Phone,
+    PlusCircle,
+    Search,
+    ShieldCheck,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 interface Row {
@@ -18,6 +31,7 @@ interface Row {
     industry: string | null;
     has_ads: boolean;
     has_care: boolean;
+    has_general: boolean;
     contact_name: string | null;
     contact_email: string | null;
     contact_phone: string | null;
@@ -29,7 +43,7 @@ interface Row {
     care: CareSummary | null;
 }
 
-type Filter = 'all' | 'care' | 'ads';
+type Filter = 'all' | 'general' | 'care' | 'ads';
 
 function ClientCard({ c, isAdmin }: { c: Row; isAdmin: boolean }) {
     const left = c.care ? c.care.total - c.care.done : 0;
@@ -45,6 +59,11 @@ function ClientCard({ c, isAdmin }: { c: Row; isAdmin: boolean }) {
                         <div className="text-muted-foreground truncate text-xs">{c.website_url.replace(/^https?:\/\//, '')}</div>
                     </div>
                     <div className="flex shrink-0 gap-1">
+                        {c.has_general && (
+                            <span title="Obsługa ogólna" className="bg-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
+                                <Briefcase className="size-3" /> obsługa
+                            </span>
+                        )}
                         {c.has_care && (
                             <span title="Opieka nad stroną" className="bg-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]">
                                 <ShieldCheck className="size-3" /> opieka
@@ -121,7 +140,7 @@ export default function ClientsIndex({ clients, showArchived, archivedCount }: {
         const s = q.trim().toLowerCase();
         return clients.filter(
             (c) =>
-                (filter === 'all' || (filter === 'care' ? c.has_care : c.has_ads)) &&
+                (filter === 'all' || (filter === 'general' ? c.has_general : filter === 'care' ? c.has_care : c.has_ads)) &&
                 (!s || [c.name, c.website_url, c.contact_name, c.contact_email, c.industry].some((v) => v?.toLowerCase().includes(s))),
         );
     }, [clients, q, filter]);
@@ -165,6 +184,7 @@ export default function ClientsIndex({ clients, showArchived, archivedCount }: {
                         {(
                             [
                                 ['all', 'Wszyscy'],
+                                ['general', 'Obsługa'],
                                 ['care', 'Opieka'],
                                 ['ads', 'Reklamy'],
                             ] as const

@@ -8,7 +8,7 @@ import { money, num } from '@/lib/format';
 import { type SharedData } from '@/types';
 import { type CareTask, type ClientProps } from '@/types/adpilot';
 import { Link, router, useForm, usePage } from '@inertiajs/react';
-import { Check, ExternalLink, KeyRound, LogIn, Mail, Megaphone, Pencil, Phone, Plus, ShieldCheck, User } from 'lucide-react';
+import { Briefcase, Check, ExternalLink, KeyRound, LogIn, Mail, Megaphone, Pencil, Phone, Plus, ShieldCheck, User } from 'lucide-react';
 import { useState } from 'react';
 
 type Kpi = { value: number | null };
@@ -236,6 +236,18 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                         <div className="grid gap-3 text-sm">
                             <div className="flex items-center justify-between gap-2">
                                 <span className="flex items-center gap-2">
+                                    <Briefcase className="size-4" /> Obsługa ogólna
+                                </span>
+                                {client.has_general ? (
+                                    <Link href={`${base}/care`} className="hover:underline">
+                                        zadania →
+                                    </Link>
+                                ) : (
+                                    <span className="text-muted-foreground text-xs">nie</span>
+                                )}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2">
                                     <ShieldCheck className="size-4" /> Opieka nad stroną
                                 </span>
                                 {client.has_care ? (
@@ -280,7 +292,7 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                                     </div>
                                 </div>
                             )}
-                            {(!client.has_care || !client.has_ads) && (
+                            {(!client.has_general || !client.has_care || !client.has_ads) && (
                                 <Link href={`${base}/edit`} className="text-muted-foreground text-xs underline-offset-2 hover:underline">
                                     Zmień usługi w edycji klienta
                                 </Link>

@@ -222,4 +222,18 @@ class ClientCareTest extends TestCase
         $this->get('/vault/unlock?back=/clients/'.$client->id)->assertRedirect('/clients/'.$client->id);
         $this->get('/vault/unlock?back=//evil.com')->assertRedirect('/clients');
     }
+
+    public function test_general_service_client(): void
+    {
+        $this->actingAs($this->admin());
+        $this->post('/clients', ['name' => 'Firma Ogólna', 'website_url' => 'firma-ogolna.pl', 'has_general' => true, 'has_care' => false, 'has_ads' => false])
+            ->assertRedirect();
+        $client = Client::where('name', 'Firma Ogólna')->first();
+        $this->assertTrue($client->has_general);
+        $this->assertFalse($client->has_care);
+
+        $this->post("/clients/{$client->id}/care/tasks", ['title' => 'Poprawić stopkę', 'due_date' => now()->toDateString()]);
+        $this->get('/clients')->assertInertia(fn ($p) => $p->where('clients.0.has_general', true)->where('clients.0.care.total', 1));
+        $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.has_general', true)->has('upcoming', 1));
+    }
 }

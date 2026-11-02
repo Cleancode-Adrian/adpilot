@@ -8,7 +8,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type SharedData } from '@/types';
 import { type ClientProps } from '@/types/adpilot';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Dices, Eye, EyeOff, Lock, Megaphone, ShieldCheck } from 'lucide-react';
+import { Briefcase, Dices, Eye, EyeOff, Lock, Megaphone, ShieldCheck } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 export default function ClientForm({
@@ -30,7 +30,8 @@ export default function ClientForm({
         contact_name: client?.contact_name ?? '',
         contact_email: client?.contact_email ?? '',
         contact_phone: client?.contact_phone ?? '',
-        has_care: client?.has_care ?? true,
+        has_general: client?.has_general ?? true,
+        has_care: client?.has_care ?? false,
         has_ads: client?.has_ads ?? false,
         goal: client?.goal ?? 'sales',
         lead_events: client?.lead_events?.join(', ') ?? '',
@@ -58,7 +59,7 @@ export default function ClientForm({
         </div>
     );
 
-    const service = (key: 'has_care' | 'has_ads', Icon: typeof ShieldCheck, label: string, hint: string) => (
+    const service = (key: 'has_general' | 'has_care' | 'has_ads', Icon: typeof ShieldCheck, label: string, hint: string) => (
         <label className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${data[key] ? 'border-foreground ring-foreground ring-1' : ''}`}>
             <input type="checkbox" checked={data[key]} onChange={(e) => setData(key, e.target.checked)} className="mt-0.5 size-4" />
             <div>
@@ -163,7 +164,13 @@ export default function ClientForm({
                 <div className="rounded-xl border p-4">
                     <h2 className="mb-1 font-medium">Usługi</h2>
                     <p className="text-muted-foreground mb-4 text-sm">Zaznacz, czym się zajmujesz u tego klienta. Możesz to zmienić później.</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        {service(
+                            'has_general',
+                            Briefcase,
+                            'Obsługa ogólna',
+                            'Zlecenia, poprawki, wsparcie – zadania doraźne z terminami, notatki, dostępy.',
+                        )}
                         {service(
                             'has_care',
                             ShieldCheck,

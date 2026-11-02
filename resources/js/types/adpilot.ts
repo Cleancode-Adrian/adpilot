@@ -16,6 +16,7 @@ export interface ClientProps {
     website_url: string;
     has_ads: boolean;
     has_care: boolean;
+    has_general: boolean;
     admin_url: string | null;
     contact_name: string | null;
     contact_phone: string | null;

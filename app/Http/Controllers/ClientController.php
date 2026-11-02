@@ -24,11 +24,11 @@ class ClientController extends Controller
             ->withCount(['credentials', 'recommendations as open_count' => fn ($q) => $q->open()])
             ->orderBy('is_demo')->orderBy('name')->get()
             ->map(fn (Client $c) => [
-                ...$c->only(['id', 'name', 'website_url', 'admin_url', 'industry', 'has_ads', 'has_care', 'contact_name', 'contact_email', 'contact_phone', 'is_demo', 'archived_at']),
+                ...$c->only(['id', 'name', 'website_url', 'admin_url', 'industry', 'has_ads', 'has_care', 'has_general', 'contact_name', 'contact_email', 'contact_phone', 'is_demo', 'archived_at']),
                 'notes_excerpt' => $c->notes ? \Illuminate\Support\Str::limit($c->notes, 140) : null,
                 'credentials_count' => $c->credentials_count,
                 'open_count' => $c->has_ads ? $c->open_count : 0,
-                'care' => $c->has_care ? $planner->summary($c) : null,
+                'care' => $c->has_care || $c->has_general ? $planner->summary($c) : null,
             ]);
 
         return Inertia::render('clients/index', [
@@ -159,7 +159,7 @@ class ClientController extends Controller
         $client->load('integrations');
 
         return [
-            ...$client->only(['id', 'name', 'website_url', 'has_ads', 'has_care', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
+            ...$client->only(['id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
             'open_count' => $client->recommendations()->open()->count(),
             'integrations' => $client->integrations->map->only(['id', 'provider', 'status', 'settings', 'last_synced_at', 'last_error']),
             'lead_event_names' => $client->leadEventNames(),
@@ -221,6 +221,7 @@ class ClientController extends Controller
             'website_url' => 'required|string|max:255',
             'has_ads' => 'boolean',
             'has_care' => 'boolean',
+            'has_general' => 'boolean',
             'admin_url' => 'nullable|string|max:500',
             'contact_name' => 'nullable|string|max:150',
             'contact_phone' => 'nullable|string|max:50',
