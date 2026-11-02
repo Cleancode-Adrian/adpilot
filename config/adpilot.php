@@ -21,6 +21,7 @@ return [
     'meta' => [
         'app_id' => env('META_APP_ID'),
         'app_secret' => env('META_APP_SECRET'),
+        'config_id' => env('META_CONFIG_ID'), // opcjonalnie: ID konfiguracji Facebook Login for Business
         'graph_version' => env('META_GRAPH_VERSION', 'v25.0'),
         'scopes' => ['ads_read', 'business_management'],
         // Kolejność wyboru akcji traktowanej jako zakup

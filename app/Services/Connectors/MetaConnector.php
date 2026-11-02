@@ -26,13 +26,17 @@ class MetaConnector
 
     public function authUrl(string $state): string
     {
+        // Facebook Login for Business: uprawnienia definiuje „konfiguracja” (config_id) zamiast scope
+        $permissions = filled(config('adpilot.meta.config_id'))
+            ? ['config_id' => config('adpilot.meta.config_id')]
+            : ['scope' => implode(',', config('adpilot.meta.scopes'))];
+
         return 'https://www.facebook.com/'.config('adpilot.meta.graph_version').'/dialog/oauth?'.http_build_query([
             'client_id' => config('adpilot.meta.app_id'),
             'redirect_uri' => route('oauth.meta.callback'),
             'state' => $state,
-            'scope' => implode(',', config('adpilot.meta.scopes')),
             'response_type' => 'code',
-        ]);
+        ] + $permissions);
     }
 
     /** Wymienia kod na długoterminowy token (~60 dni). */
