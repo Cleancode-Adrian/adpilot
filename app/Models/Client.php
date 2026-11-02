@@ -42,6 +42,31 @@ class Client extends Model
 
     public const GOALS = ['sales' => 'Sprzedaż (sklep)', 'leads' => 'Pozyskiwanie kontaktów', 'mixed' => 'Sprzedaż i kontakty'];
 
+    /**
+     * Porządkuje adres strony: usuwa zdublowane/uszkodzone przedrostki („https//”, „https://https://”, „www” zostaje),
+     * dodaje https:// i zwraca null, gdy to nie jest poprawny adres.
+     */
+    public static function normalizeUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+        $scheme = preg_match('#^http://(?!https?[:/])#i', $url) ? 'http' : 'https';
+        // zdejmij dowolną liczbę (także uszkodzonych) przedrostków http(s)
+        // tylko pełne „http”/„https” zakończone dwukropkiem lub ukośnikiem – nie ruszamy domen typu „httpbin.org”
+        $rest = preg_replace('#^(?:\s*https?\s*(?::\s*/*|/+))+#i', '', $url);
+        $rest = ltrim((string) $rest, '/');
+        if ($rest === '') {
+            return null;
+        }
+        $candidate = $scheme.'://'.$rest;
+        $host = parse_url($candidate, PHP_URL_HOST);
+
+        if (! filter_var($candidate, FILTER_VALIDATE_URL) || ! $host || ! str_contains($host, '.')) {
+            return null;
+        }
+
+        return rtrim($candidate, '/');
+    }
+
     public function leadEventNames(): array
     {
         return $this->lead_events ?: self::DEFAULT_LEAD_EVENTS;

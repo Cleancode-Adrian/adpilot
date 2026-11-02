@@ -402,9 +402,8 @@ class TrackingAuditor
 
     private function normalizeUrl(string $url): string
     {
-        $url = trim($url);
-
-        return preg_match('#^https?://#i', $url) ? $url : 'https://'.$url;
+        return \App\Models\Client::normalizeUrl($url)
+            ?? throw new \RuntimeException("Nieprawidłowy adres strony: {$url}. Popraw go w ustawieniach klienta (np. https://twojadomena.pl).");
     }
 
     private function finalUrl(Response $response, string $fallback): string

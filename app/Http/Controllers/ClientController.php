@@ -137,9 +137,11 @@ class ClientController extends Controller
             'auto_send_reports' => 'boolean',
             'notes' => 'nullable|string|max:5000',
         ]);
-        if (! preg_match('#^https?://#i', $data['website_url'])) {
-            $data['website_url'] = 'https://'.$data['website_url'];
+        $url = Client::normalizeUrl($data['website_url']);
+        if (! $url) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['website_url' => 'Nieprawidłowy adres strony – wpisz np. projekciarz.pl lub https://projekciarz.pl']);
         }
+        $data['website_url'] = $url;
         $data['currency'] = strtoupper($data['currency']);
         $data['goal'] ??= 'sales';
         $events = array_values(array_filter(array_map('trim', preg_split('/[,\s]+/', (string) ($data['lead_events'] ?? '')))));

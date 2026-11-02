@@ -226,4 +226,17 @@ class AdPilotTest extends TestCase
         $this->withHeader('User-Agent', 'GPTBot')->get("/r/{$client->report_token}/{$report->id}")->assertForbidden();
         $this->withHeader('User-Agent', 'Chrome')->get("/r/{$client->report_token}/{$report->id}/pdf")->assertOk()->assertHeader('X-Robots-Tag');
     }
+
+    public function test_website_url_typos_are_fixed_or_rejected(): void
+    {
+        Http::fake();
+        $this->actingAs(User::factory()->create());
+
+        $this->post('/clients', ['name' => 'A', 'website_url' => 'https//projekciarz.pl', 'currency' => 'PLN'])->assertRedirect();
+        $this->assertSame('https://projekciarz.pl', Client::where('name', 'A')->value('website_url'));
+
+        $this->post('/clients', ['name' => 'B', 'website_url' => 'sklep', 'currency' => 'PLN'])->assertSessionHasErrors('website_url');
+        $this->assertSame('https://projekciarz.pl', Client::normalizeUrl('https://https/projekciarz.pl'));
+        $this->assertSame('https://httpbin.org', Client::normalizeUrl('httpbin.org'));
+    }
 }
