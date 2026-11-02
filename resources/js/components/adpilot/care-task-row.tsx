@@ -3,13 +3,56 @@ import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type CareStatus, type CareTask } from '@/types/adpilot';
 import { router } from '@inertiajs/react';
-import { AlarmClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
+import { AlarmClock, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 /** Data lokalna RRRR-MM-DD (nie UTC – inaczej po północy byłby poprzedni dzień). */
 export const localDate = (d = new Date()) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const today = () => localDate();
+const addDays = (iso: string, n: number) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return localDate(new Date(y, m - 1, d + n));
+};
+
+/** Zmiana terminu: kalendarz + szybkie przesunięcia. */
+function DueDateEditor({ task, onChange, onClose }: { task: CareTask; onChange: (due: string) => void; onClose: () => void }) {
+    const base = task.due_date < today() ? today() : task.due_date.slice(0, 10);
+    const quick: [string, string][] = [
+        ['Dziś', today()],
+        ['Jutro', addDays(today(), 1)],
+        ['+3 dni', addDays(base, 3)],
+        ['+tydzień', addDays(base, 7)],
+        [
+            '+miesiąc',
+            (() => {
+                const [y, m, d] = base.split('-').map(Number);
+                const last = new Date(y, m + 1, 0).getDate();
+                return localDate(new Date(y, m, Math.min(d, last)));
+            })(),
+        ],
+    ];
+    return (
+        <div className="bg-muted/40 mt-2 flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5">
+            <span className="text-muted-foreground text-xs">Termin:</span>
+            <input
+                type="date"
+                defaultValue={task.due_date.slice(0, 10)}
+                onChange={(e) => e.target.value && onChange(e.target.value)}
+                className="border-input bg-background h-8 rounded-md border px-2 text-sm"
+                aria-label="Nowy termin"
+            />
+            {quick.map(([label, value]) => (
+                <Button key={label} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onChange(value)}>
+                    {label}
+                </Button>
+            ))}
+            <Button type="button" variant="ghost" size="sm" className="ml-auto h-7 px-2 text-xs" onClick={onClose}>
+                Zamknij
+            </Button>
+        </div>
+    );
+}
 
 /** Termin: zawsze ikona + tekst (nie sam kolor). */
 function DueBadge({ task }: { task: CareTask }) {
@@ -35,10 +78,11 @@ function DueBadge({ task }: { task: CareTask }) {
 export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; showPeriod?: boolean }) {
     const [open, setOpen] = useState(false);
     const [note, setNote] = useState(task.note ?? '');
+    const [editDate, setEditDate] = useState(false);
     const done = task.status === 'done';
     const skipped = task.status === 'skipped';
 
-    const update = (data: { status?: CareStatus; note?: string | null }) =>
+    const update = (data: { status?: CareStatus; note?: string | null; due_date?: string }) =>
         router.patch(`/care/tasks/${task.id}`, data, { preserveScroll: true, preserveState: true });
 
     return (
@@ -62,7 +106,13 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         )}
                     </button>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                        <DueBadge task={task} />
+                        {task.status === 'todo' ? (
+                            <button type="button" onClick={() => setEditDate(!editDate)} title="Zmień termin" className="hover:underline">
+                                <DueBadge task={task} />
+                            </button>
+                        ) : (
+                            <DueBadge task={task} />
+                        )}
                         {showPeriod && <span className="text-muted-foreground">z miesiąca {task.period}</span>}
                         {done && task.done_at && (
                             <span className="text-muted-foreground">
@@ -78,6 +128,17 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         )}
                         {!task.care_template_id && <span className="text-muted-foreground">jednorazowe</span>}
                     </div>
+
+                    {editDate && task.status === 'todo' && (
+                        <DueDateEditor
+                            task={task}
+                            onClose={() => setEditDate(false)}
+                            onChange={(due) => {
+                                update({ due_date: due });
+                                setEditDate(false);
+                            }}
+                        />
+                    )}
 
                     {open && (
                         <div className="mt-2 space-y-2">
@@ -100,9 +161,14 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         </Button>
                     ) : (
                         !done && (
-                            <Button variant="ghost" size="sm" title="Pomiń w tym miesiącu" onClick={() => update({ status: 'skipped' })}>
-                                <CircleSlash className="size-4" />
-                            </Button>
+                            <>
+                                <Button variant="ghost" size="sm" title="Zmień termin" onClick={() => setEditDate(!editDate)}>
+                                    <CalendarClock className="size-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" title="Pomiń w tym miesiącu" onClick={() => update({ status: 'skipped' })}>
+                                    <CircleSlash className="size-4" />
+                                </Button>
+                            </>
                         )
                     )}
                     {!task.care_template_id && (

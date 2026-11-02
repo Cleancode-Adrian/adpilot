@@ -236,4 +236,28 @@ class ClientCareTest extends TestCase
         $this->get('/clients')->assertInertia(fn ($p) => $p->where('clients.0.has_general', true)->where('clients.0.care.total', 1));
         $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.has_general', true)->has('upcoming', 1));
     }
+
+    public function test_task_due_date_can_be_changed(): void
+    {
+        $this->actingAs($this->admin());
+        $client = $this->client();
+        $client->careTemplates()->create(['title' => 'Aktualizacje', 'frequency' => 'monthly', 'start_month' => 1, 'due_day' => 10]);
+        app(CarePlanner::class)->ensureMonth($client);
+        $planTask = $client->careTasks()->whereNotNull('care_template_id')->first();
+        $this->post("/clients/{$client->id}/care/tasks", ['title' => 'Baner', 'due_date' => now()->toDateString()]);
+        $oneOff = $client->careTasks()->whereNull('care_template_id')->first();
+
+        $next = now()->addMonthNoOverflow()->startOfMonth()->addDays(4)->toDateString();
+        $this->patch("/care/tasks/{$oneOff->id}", ['due_date' => $next])->assertRedirect();
+        $this->assertSame($next, substr($oneOff->fresh()->due_date, 0, 10));
+        $this->assertSame(substr($next, 0, 7), $oneOff->fresh()->period); // jednorazowe przechodzi do nowego miesiąca
+
+        $this->patch("/care/tasks/{$planTask->id}", ['due_date' => $next]);
+        $this->assertSame($next, substr($planTask->fresh()->due_date, 0, 10));
+        $this->assertSame(now()->format('Y-m'), $planTask->fresh()->period); // z planu zostaje w swoim miesiącu
+        app(CarePlanner::class)->ensureMonth($client);
+        $this->assertSame(1, $client->careTasks()->whereNotNull('care_template_id')->count()); // bez duplikatu
+
+        $this->patch("/care/tasks/{$oneOff->id}", ['due_date' => 'nie-data'])->assertSessionHasErrors('due_date');
+    }
 }

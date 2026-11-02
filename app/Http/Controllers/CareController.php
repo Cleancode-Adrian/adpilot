@@ -101,6 +101,13 @@ class CareController extends Controller
             'title' => 'sometimes|string|max:255',
             'due_date' => 'sometimes|date',
         ]);
+        // Jednorazowe zadanie „wędruje” do miesiąca nowego terminu; zadanie z planu zostaje w swoim miesiącu
+        if (isset($data['due_date'])) {
+            $data['due_date'] = substr($data['due_date'], 0, 10);
+            if (! $task->care_template_id) {
+                $data['period'] = substr($data['due_date'], 0, 7);
+            }
+        }
         if (isset($data['status'])) {
             $data += $data['status'] === 'todo'
                 ? ['done_at' => null, 'done_by' => null]
