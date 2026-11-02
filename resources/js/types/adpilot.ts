@@ -32,6 +32,42 @@ export interface ClientProps {
     integrations: Integration[];
     google_configured: boolean;
     meta_configured: boolean;
+    care: CareSummary | null;
+    credentials_count: number;
+}
+
+export interface CareSummary {
+    period: string;
+    total: number;
+    done: number;
+    overdue: number;
+    due_today: number;
+}
+
+export type CareStatus = 'todo' | 'done' | 'skipped';
+
+export interface CareTask {
+    id: number;
+    client_id?: number;
+    care_template_id?: number | null;
+    period: string;
+    title: string;
+    description: string | null;
+    due_date: string;
+    status: CareStatus;
+    done_at: string | null;
+    note: string | null;
+    done_by?: { id: number; name: string } | null;
+}
+
+export interface CareTemplate {
+    id: number;
+    title: string;
+    description: string | null;
+    frequency: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
+    start_month: number;
+    due_day: number;
+    active: boolean;
 }
 
 export interface Stat {

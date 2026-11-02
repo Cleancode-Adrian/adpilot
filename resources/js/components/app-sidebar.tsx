@@ -3,17 +3,18 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Activity, LayoutGrid, ListChecks, Palette, PlusCircle, UsersRound } from 'lucide-react';
+import { Activity, LayoutGrid, ListChecks, Palette, PlusCircle, ShieldCheck, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
-    { title: 'Pulpit', url: '/dashboard', icon: LayoutGrid },
-    { title: 'Zadania', url: '/tasks', icon: ListChecks },
-    { title: 'Nowy klient', url: '/clients/create', icon: PlusCircle },
-];
-
 export function AppSidebar() {
-    const { admin } = usePage<SharedData>().props;
+    const { admin, care_due } = usePage<SharedData>().props;
+
+    const mainNavItems: NavItem[] = [
+        { title: 'Pulpit', url: '/dashboard', icon: LayoutGrid },
+        { title: 'Zadania reklamowe', url: '/tasks', icon: ListChecks },
+        { title: 'Opieka nad stronami', url: '/care', icon: ShieldCheck, badge: care_due },
+        { title: 'Nowy klient', url: '/clients/create', icon: PlusCircle },
+    ];
 
     const adminItems: NavItem[] = admin
         ? [

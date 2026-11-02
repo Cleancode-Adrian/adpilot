@@ -72,10 +72,20 @@ Artisan::command('adpilot:digest {--force : wyślij nawet gdy nie ma nic pilnego
         }
     }
 
-    $digest = ['clients' => $clients, 'integrationProblems' => $problems,
-        'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)];
+    // Opieka: zaległe, na dziś i w ciągu 3 dni
+    app(\App\Services\Care\CarePlanner::class)->ensureAll();
+    $care = \App\Models\CareTask::due(now()->addDays(3)->toDateString())->whereHas('client', fn ($q) => $q->active())
+        ->with('client:id,name')->orderBy('due_date')->get()->groupBy('client_id')->map(fn ($items) => [
+            'id' => $items->first()->client_id,
+            'name' => $items->first()->client->name,
+            'items' => $items->map(fn ($t) => ['title' => $t->title, 'due_date' => $t->due_date, 'overdue' => $t->due_date < now()->toDateString()])->values()->all(),
+        ])->values()->all();
 
-    if (! $clients && ! $problems && ! $this->option('force')) {
+    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care,
+        'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)
+            + \App\Models\CareTask::due(now()->subDay()->toDateString())->whereHas('client', fn ($q) => $q->active())->count()];
+
+    if (! $clients && ! $problems && ! $care && ! $this->option('force')) {
         $this->info('Nic pilnego – nie wysyłam.');
 
         return;
@@ -127,6 +137,7 @@ Schedule::call(function () {
         ->each(fn ($c) => RunTrackingAuditJob::dispatch($c->audits()->create(['url' => $c->website_url])));
 })->weeklyOn(1, '04:00')->name('adpilot-weekly-audit');
 
+Schedule::call(fn () => app(\App\Services\Care\CarePlanner::class)->ensureAll())->dailyAt('00:15')->name('adpilot-care-plan');
 Schedule::command('adpilot:digest')->dailyAt('08:00');
 Schedule::command('adpilot:backup')->dailyAt('03:00');
 Schedule::command('adpilot:monthly-reports')->monthlyOn(2, '07:00');

@@ -109,6 +109,8 @@ class ClientController extends Controller
             'lead_event_names' => $client->leadEventNames(),
             'google_configured' => GoogleAuth::configured(),
             'meta_configured' => MetaConnector::configured(),
+            'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(\App\Services\Care\CarePlanner::class)->summary($client) : null,
+            'credentials_count' => $client->credentials()->count(),
         ];
     }
 

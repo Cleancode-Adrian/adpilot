@@ -28,6 +28,7 @@ export interface SharedData {
     flash: { success?: string | null; error?: string | null; invite_link?: string | null };
     brand: Brand;
     admin: { problems: number } | null;
+    care_due: number;
     auth: Auth;
     [key: string]: unknown;
 }

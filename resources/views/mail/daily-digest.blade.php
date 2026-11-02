@@ -8,8 +8,18 @@
 @endforeach
 
 @endif
+@if(count($care ?? []))
+## 🛠 Opieka nad stronami – do zrobienia
+@foreach($care as $c)
+**[{{ $c['name'] }}]({{ route('clients.care', $c['id']) }})**
+@foreach($c['items'] as $t)
+- {{ $t['overdue'] ? '⏰ PO TERMINIE' : 'do '.\Carbon\Carbon::parse($t['due_date'])->format('d.m') }} – {{ $t['title'] }}
+@endforeach
+
+@endforeach
+@endif
 @if(count($clients))
-## Pilne zadania
+## Pilne zadania reklamowe
 @foreach($clients as $c)
 **{{ $c['name'] }}**
 @foreach($c['items'] as $r)
@@ -18,7 +28,7 @@
 
 @endforeach
 @else
-Brak krytycznych i pilnych zadań – konta działają zgodnie z celami. ✅
+Brak krytycznych zadań reklamowych – konta działają zgodnie z celami. ✅
 @endif
 
 <x-mail::button :url="$url">

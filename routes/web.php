@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\CareController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\RecommendationController;
@@ -39,6 +41,26 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('reports/{report}/note', [ReportController::class, 'updateNote'])->name('reports.note');
     Route::post('reports/{report}/send', [ReportController::class, 'send'])->name('reports.send');
     Route::delete('reports/{report}', [ReportController::class, 'destroy'])->name('reports.destroy');
+
+    // Opieka nad stroną: plan cykliczny + zadania na miesiąc
+    Route::get('care', [CareController::class, 'overview'])->name('care');
+    Route::get('clients/{client}/care', [CareController::class, 'index'])->name('clients.care');
+    Route::post('clients/{client}/care/tasks', [CareController::class, 'storeTask'])->name('care.tasks.store');
+    Route::patch('care/tasks/{task}', [CareController::class, 'updateTask'])->name('care.tasks.update');
+    Route::delete('care/tasks/{task}', [CareController::class, 'destroyTask'])->name('care.tasks.destroy');
+    Route::post('clients/{client}/care/templates', [CareController::class, 'storeTemplate'])->name('care.templates.store');
+    Route::post('clients/{client}/care/preset', [CareController::class, 'applyPreset'])->name('care.preset');
+    Route::patch('care/templates/{template}', [CareController::class, 'updateTemplate'])->name('care.templates.update');
+    Route::delete('care/templates/{template}', [CareController::class, 'destroyTemplate'])->name('care.templates.destroy');
+
+    // Sejf dostępów – tylko administratorzy; podgląd wymaga ponownego podania hasła (ważne 3 h)
+    Route::middleware('can:admin')->group(function () {
+        Route::get('clients/{client}/credentials', [CredentialController::class, 'index'])->middleware('password.confirm')->name('clients.credentials');
+        Route::post('credentials/{credential}/reveal', [CredentialController::class, 'reveal'])->middleware('password.confirm')->name('credentials.reveal');
+        Route::post('clients/{client}/credentials', [CredentialController::class, 'store'])->name('credentials.store');
+        Route::put('credentials/{credential}', [CredentialController::class, 'update'])->name('credentials.update');
+        Route::delete('credentials/{credential}', [CredentialController::class, 'destroy'])->name('credentials.destroy');
+    });
 
     Route::patch('recommendations/{recommendation}', [RecommendationController::class, 'update'])->name('recommendations.update');
 

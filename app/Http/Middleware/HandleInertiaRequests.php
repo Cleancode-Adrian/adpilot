@@ -47,6 +47,8 @@ class HandleInertiaRequests extends Middleware
                 'invite_link' => fn () => $request->session()->get('invite_link'),
             ],
             'brand' => fn () => \App\Models\Setting::brand(),
+            // Licznik w menu „Opieka”: zadania po terminie i na dziś (aktywni klienci)
+            'care_due' => fn () => $request->user() ? \App\Models\CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             'admin' => fn () => $request->user()?->is_admin ? [
                 'problems' => app(\App\Services\SystemStatus::class)->problemCount(),
             ] : null,
