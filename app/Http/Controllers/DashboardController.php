@@ -55,9 +55,10 @@ class DashboardController extends Controller
                 ->where('status', $status)
                 ->when(request('severity'), fn ($q, $s) => $q->where('severity', $s))
                 ->when(request('client'), fn ($q, $c) => $q->where('client_id', $c))
-                ->bySeverity()->paginate(50)->withQueryString(),
+                ->whereHas('client', fn ($q) => $q->active())
+                ->bySeverity()->paginate(request('view', 'clients') === 'list' || request('client') ? 50 : 300)->withQueryString(),
             'clients' => Client::active()->orderBy('name')->get(['id', 'name']),
-            'filters' => request()->only(['status', 'severity', 'client']) + ['status' => $status],
+            'filters' => request()->only(['status', 'severity', 'client', 'view']) + ['status' => $status],
         ]);
     }
 }
