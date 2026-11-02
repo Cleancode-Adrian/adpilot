@@ -1,19 +1,31 @@
 import { NativeSelect } from '@/components/adpilot/ui';
+import { generatePassword } from '@/components/adpilot/vault';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { type SharedData } from '@/types';
 import { type ClientProps } from '@/types/adpilot';
-import { Head, router, useForm } from '@inertiajs/react';
-import { Megaphone, ShieldCheck } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Dices, Eye, EyeOff, Lock, Megaphone, ShieldCheck } from 'lucide-react';
+import { FormEventHandler, useState } from 'react';
 
-export default function ClientForm({ client }: { client: ClientProps | null }) {
+export default function ClientForm({
+    client,
+    panel,
+}: {
+    client: ClientProps | null;
+    panel?: { username: string | null; has_secret: boolean } | null;
+}) {
+    const { admin } = usePage<SharedData>().props;
+    const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, put, processing, errors } = useForm({
         name: client?.name ?? '',
         website_url: client?.website_url ?? '',
         admin_url: client?.admin_url ?? '',
+        panel_login: panel?.username ?? '',
+        panel_password: '',
         industry: client?.industry ?? '',
         contact_name: client?.contact_name ?? '',
         contact_email: client?.contact_email ?? '',
@@ -74,13 +86,63 @@ export default function ClientForm({ client }: { client: ClientProps | null }) {
                     <div className="grid gap-4 sm:grid-cols-2">
                         {field('name', 'Nazwa klienta', { required: true, placeholder: 'np. Medoncr' })}
                         {field('website_url', 'Adres strony', { required: true, placeholder: 'medoncr.com' })}
-                        {field(
-                            'admin_url',
-                            'Adres logowania do panelu strony',
-                            { placeholder: 'medoncr.com/wp-admin' },
-                            'Przycisk „Zaloguj się” w karcie klienta. Hasło zapisz w zakładce Dostępy.',
-                        )}
                         {field('industry', 'Branża', { placeholder: 'np. usługi medyczne' })}
+                    </div>
+                </div>
+
+                <div className="rounded-xl border p-4">
+                    <h2 className="mb-1 font-medium">Logowanie do panelu strony</h2>
+                    <p className="text-muted-foreground mb-4 flex items-center gap-1.5 text-sm">
+                        <Lock className="size-3.5" /> Hasło zapisuje się zaszyfrowane. FTP, hosting, bazę i resztę dodasz w karcie klienta → Dane
+                        dostępowe.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="sm:col-span-2">{field('admin_url', 'Adres logowania', { placeholder: 'medoncr.com/wp-admin' })}</div>
+                        {admin ? (
+                            <>
+                                {field('panel_login', 'Login', { autoComplete: 'off', placeholder: 'admin' })}
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor="panel_password">Hasło</Label>
+                                    <div className="flex gap-1">
+                                        <Input
+                                            id="panel_password"
+                                            type={showPassword ? 'text' : 'password'}
+                                            autoComplete="new-password"
+                                            className="font-mono"
+                                            value={data.panel_password}
+                                            placeholder={panel?.has_secret ? 'zapisane – zostaw puste, by nie zmieniać' : ''}
+                                            onChange={(e) => setData('panel_password', e.target.value)}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9"
+                                            title={showPassword ? 'Ukryj' : 'Pokaż'}
+                                            onClick={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9"
+                                            title="Wygeneruj silne hasło"
+                                            onClick={() => {
+                                                setData('panel_password', generatePassword());
+                                                setShowPassword(true);
+                                            }}
+                                        >
+                                            <Dices className="size-4" />
+                                        </Button>
+                                    </div>
+                                    <InputError message={errors.panel_password} />
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-muted-foreground text-xs sm:col-span-2">Login i hasło może zapisać administrator.</p>
+                        )}
                     </div>
                 </div>
 

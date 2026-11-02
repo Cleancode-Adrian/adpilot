@@ -39,6 +39,7 @@ export interface ClientProps {
     meta_configured: boolean;
     care: CareSummary | null;
     credentials_count: number;
+    panel: { id: number; username: string | null; url: string | null; has_secret: boolean } | null;
 }
 
 export interface CareSummary {

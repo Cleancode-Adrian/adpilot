@@ -21,10 +21,10 @@ export default function ClientLayout({ client, title, children }: { client: Clie
             label: 'Klient',
             tabs: [
                 { href: base, label: 'Karta' },
+                { href: `${base}/care`, label: `Zadania${client.care?.total ? ` (${client.care.done}/${client.care.total})` : ''}` },
                 ...(props.admin
-                    ? [{ href: `${base}/credentials`, label: `Dostępy${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
+                    ? [{ href: `${base}/credentials`, label: `Dane dostępowe${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
                     : []),
-                { href: `${base}/care`, label: `Zadania i opieka${client.care?.total ? ` (${client.care.done}/${client.care.total})` : ''}` },
             ],
         },
         ...(client.has_ads

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ClientCredential extends Model
 {
     public const CATEGORIES = [
-        'cms' => 'Panel strony (WordPress / CMS)',
+        'cms' => 'Logowanie do strony (panel)',
         'hosting' => 'Hosting / panel serwera',
         'ftp' => 'FTP / SFTP / SSH',
         'database' => 'Baza danych',
@@ -20,7 +20,7 @@ class ClientCredential extends Model
         'email' => 'Poczta',
         'google' => 'Google (Analytics, Search Console…)',
         'social' => 'Social media / Meta',
-        'other' => 'Inne',
+        'other' => 'Pozostałe',
     ];
 
     protected $fillable = ['client_id', 'category', 'label', 'url', 'username', 'secret', 'notes', 'secret_changed_at'];

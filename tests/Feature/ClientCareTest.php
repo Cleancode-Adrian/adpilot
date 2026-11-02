@@ -182,4 +182,44 @@ class ClientCareTest extends TestCase
 
         $this->get('/')->assertRedirect('/clients');
     }
+
+    public function test_panel_login_and_password_from_client_form_go_to_encrypted_vault(): void
+    {
+        $this->actingAs($admin = $this->admin());
+
+        $this->post('/clients', [
+            'name' => 'Medoncr', 'website_url' => 'medoncr.com', 'admin_url' => 'medoncr.com/wp-admin',
+            'panel_login' => 'adrian', 'panel_password' => 'S3kretne!', 'has_care' => true,
+        ])->assertRedirect();
+        $client = Client::where('name', 'Medoncr')->first();
+        $cred = $client->credentials()->where('category', 'cms')->first();
+        $this->assertSame('adrian', $cred->username);
+        $this->assertSame('S3kretne!', $cred->secret);
+        $this->assertSame('https://medoncr.com/wp-admin', $cred->url);
+        $this->assertStringNotContainsString('S3kretne', DB::table('client_credentials')->value('secret'));
+
+        // karta: login widoczny, hasło nie
+        $res = $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.panel.username', 'adrian')->where('client.panel.has_secret', true));
+        $this->assertStringNotContainsString('S3kretne!', $res->getContent());
+
+        // edycja: formularz nie zawiera hasła; puste hasło = bez zmian
+        $edit = $this->get("/clients/{$client->id}/edit")->assertInertia(fn ($p) => $p->where('panel.username', 'adrian'));
+        $this->assertStringNotContainsString('S3kretne!', $edit->getContent());
+        $this->put("/clients/{$client->id}", ['name' => 'Medoncr', 'website_url' => 'medoncr.com', 'admin_url' => 'medoncr.com/wp-admin', 'panel_login' => 'admin2', 'panel_password' => '', 'has_care' => true]);
+        $cred->refresh();
+        $this->assertSame('admin2', $cred->username);
+        $this->assertSame('S3kretne!', $cred->secret);
+        $this->assertSame(1, $client->credentials()->count());
+
+        // użytkownik bez uprawnień nie zmieni hasła przez formularz klienta
+        $this->actingAs(User::factory()->create(['is_admin' => false]));
+        $this->put("/clients/{$client->id}", ['name' => 'Medoncr', 'website_url' => 'medoncr.com', 'panel_login' => 'hacker', 'panel_password' => 'x', 'has_care' => true]);
+        $this->assertSame('admin2', $cred->fresh()->username);
+        $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.panel', null));
+
+        // odblokowanie sejfu wraca tylko na adres w panelu
+        $this->actingAs($admin)->withSession(['auth.password_confirmed_at' => time()]);
+        $this->get('/vault/unlock?back=/clients/'.$client->id)->assertRedirect('/clients/'.$client->id);
+        $this->get('/vault/unlock?back=//evil.com')->assertRedirect('/clients');
+    }
 }

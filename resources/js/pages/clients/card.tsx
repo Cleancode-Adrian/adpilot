@@ -1,5 +1,6 @@
 import { CareProgress, CareTaskRow, localDate } from '@/components/adpilot/care-task-row';
 import { Section } from '@/components/adpilot/ui';
+import { CopyButton, SecretValue } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ClientLayout from '@/layouts/client-layout';
@@ -124,11 +125,11 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
 
                 <div className="grid content-start gap-4">
                     <Section title="Logowanie do strony">
-                        <div className="grid gap-2">
+                        <div className="grid gap-3">
                             {client.admin_url ? (
                                 <Button asChild>
                                     <a href={client.admin_url} target="_blank" rel="noreferrer noopener">
-                                        <LogIn className="size-4" /> Zaloguj się do panelu
+                                        <LogIn className="size-4" /> Otwórz panel strony
                                     </a>
                                 </Button>
                             ) : (
@@ -138,12 +139,42 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                                     </Link>
                                 </Button>
                             )}
-                            {client.admin_url && <div className="text-muted-foreground truncate text-xs">{client.admin_url}</div>}
+                            {client.admin_url && <div className="text-muted-foreground -mt-1 truncate text-xs">{client.admin_url}</div>}
+
+                            {admin &&
+                                (client.panel ? (
+                                    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-sm">
+                                        <dt className="text-muted-foreground text-xs">Login</dt>
+                                        <dd className="flex min-w-0 items-center gap-1">
+                                            {client.panel.username ? (
+                                                <>
+                                                    <span className="truncate font-mono">{client.panel.username}</span>
+                                                    <CopyButton value={client.panel.username} label="Kopiuj login" />
+                                                </>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">brak</span>
+                                            )}
+                                        </dd>
+                                        <dt className="text-muted-foreground text-xs">Hasło</dt>
+                                        <dd>
+                                            {client.panel.has_secret ? (
+                                                <SecretValue id={client.panel.id} />
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">brak</span>
+                                            )}
+                                        </dd>
+                                    </dl>
+                                ) : (
+                                    <Link href={`${base}/edit`} className="text-muted-foreground text-xs underline-offset-2 hover:underline">
+                                        + Zapisz login i hasło do panelu
+                                    </Link>
+                                ))}
+
                             {admin && (
                                 <Button variant="outline" size="sm" asChild>
                                     <Link href={`${base}/credentials`}>
-                                        <KeyRound className="size-4" />
-                                        {client.credentials_count ? `Hasła i dostępy (${client.credentials_count})` : 'Zapisz hasła w sejfie'}
+                                        <KeyRound className="size-4" /> FTP, hosting, baza i pozostałe
+                                        {client.credentials_count ? ` (${client.credentials_count})` : ''}
                                     </Link>
                                 </Button>
                             )}

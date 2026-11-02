@@ -57,6 +57,11 @@ Route::middleware(['auth'])->group(function () {
 
     // Sejf dostępów – tylko administratorzy; podgląd wymaga ponownego podania hasła (ważne 3 h)
     Route::middleware('can:admin')->group(function () {
+        Route::get('vault/unlock', function (\Illuminate\Http\Request $request) {
+            $back = (string) $request->query('back', '/clients');
+
+            return redirect(str_starts_with($back, '/') && ! str_starts_with($back, '//') ? $back : '/clients');
+        })->middleware('password.confirm')->name('vault.unlock');
         Route::get('clients/{client}/credentials', [CredentialController::class, 'index'])->middleware('password.confirm')->name('clients.credentials');
         Route::post('credentials/{credential}/reveal', [CredentialController::class, 'reveal'])->middleware('password.confirm')->name('credentials.reveal');
         Route::post('clients/{client}/credentials', [CredentialController::class, 'store'])->name('credentials.store');

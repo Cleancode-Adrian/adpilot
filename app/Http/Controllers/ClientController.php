@@ -46,6 +46,7 @@ class ClientController extends Controller
     public function store(Request $request)
     {
         $client = Client::create($this->validated($request));
+        $this->syncPanelLogin($request, $client);
 
         if ($client->has_ads) {
             // od razu audyt strony – działa bez dostępu do kont reklamowych
@@ -60,14 +61,17 @@ class ClientController extends Controller
         return redirect()->route('clients.show', $client)->with('success', 'Klient dodany.');
     }
 
-    public function edit(Client $client)
+    public function edit(Request $request, Client $client)
     {
-        return Inertia::render('clients/form', ['client' => $client]);
+        $panel = $request->user()->is_admin ? $this->panelCredential($client) : null;
+
+        return Inertia::render('clients/form', ['client' => $client, 'panel' => $panel ? ['username' => $panel->username, 'has_secret' => filled($panel->getRawOriginal('secret'))] : null]);
     }
 
     public function update(Request $request, Client $client)
     {
         $client->update($this->validated($request));
+        $this->syncPanelLogin($request, $client);
 
         return redirect()->route('clients.show', $client)->with('success', 'Zapisano zmiany.');
     }
@@ -163,7 +167,43 @@ class ClientController extends Controller
             'meta_configured' => MetaConnector::configured(),
             'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(\App\Services\Care\CarePlanner::class)->summary($client) : null,
             'credentials_count' => $client->credentials()->count(),
+            // Logowanie do panelu strony – bez hasła (to odsłania się osobno, z wpisem w dzienniku)
+            'panel' => auth()->user()?->is_admin && ($p = $this->panelCredential($client))
+                ? ['id' => $p->id, 'username' => $p->username, 'url' => $p->url, 'has_secret' => filled($p->getRawOriginal('secret'))]
+                : null,
         ];
+    }
+
+    /** Pierwszy zapisany dostęp do panelu strony (kategoria „cms”). */
+    private function panelCredential(Client $client): ?\App\Models\ClientCredential
+    {
+        return $client->credentials()->where('category', 'cms')->orderBy('id')->first();
+    }
+
+    /** Login i hasło do panelu z formularza klienta → zaszyfrowany sejf (tylko administrator). */
+    private function syncPanelLogin(Request $request, Client $client): void
+    {
+        if (! $request->user()?->is_admin) {
+            return;
+        }
+        $data = $request->validate(['panel_login' => 'nullable|string|max:255', 'panel_password' => 'nullable|string|max:2000']);
+        $login = $data['panel_login'] ?? null;
+        $password = $data['panel_password'] ?? null;
+        $cred = $this->panelCredential($client);
+
+        if (! $cred && ! filled($login) && ! filled($password)) {
+            return;
+        }
+        $cred ??= $client->credentials()->make(['category' => 'cms', 'label' => 'Panel strony']);
+        $cred->fill(['username' => $login, 'url' => $client->admin_url ?? $cred->url]);
+        if (filled($password) && $password !== $cred->secret) {
+            $cred->fill(['secret' => $password, 'secret_changed_at' => now()]);
+        }
+        if ($cred->isDirty() || ! $cred->exists) {
+            $action = $cred->exists ? 'update' : 'create';
+            $cred->save();
+            $cred->log($action, $request->user(), $request->ip());
+        }
     }
 
     private function period(Request $request): array
