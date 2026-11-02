@@ -32,16 +32,28 @@ class TrackingAuditor
         'Shopify Customer Privacy' => ['customerPrivacy'],
     ];
 
+    /**
+     * Sygnatury techniczne platform – szukane WYŁĄCZNIE w kodzie (znaczniki, adresy plików, skrypty),
+     * nigdy w widocznym tekście (strona może po prostu pisać o WooCommerce czy Shopify).
+     * Kolejność ma znaczenie: najpierw sklepy, potem CMS-y i frameworki.
+     */
     private const PLATFORMS = [
-        'Shopify' => ['cdn.shopify.com', 'Shopify.theme'],
-        'WooCommerce' => ['woocommerce', 'wc-ajax'],
-        'PrestaShop' => ['prestashop', '/modules/ps_'],
-        'Shoper' => ['shoper.pl', 'shoper-'],
-        'IdoSell' => ['idosell', 'iai-shop', 'iaicdn'],
-        'Magento' => ['Magento_', 'mage/cookies'],
-        'Sky-Shop' => ['sky-shop'],
-        'WordPress' => ['wp-content', 'wp-includes'],
+        'Shopify' => ['cdn.shopify.com', 'Shopify.theme', 'myshopify.com/'],
+        'WooCommerce' => ['/plugins/woocommerce/', 'wc-ajax=', 'woocommerce-no-js', 'wc_add_to_cart_params'],
+        'PrestaShop' => ['var prestashop', '/modules/ps_', 'prestashop.urls'],
+        'Magento' => ['Magento_', 'mage/cookies', 'x-magento-init'],
+        'IdoSell' => ['iai-shop', 'iaicdn.com'],
+        'WordPress' => ['/wp-content/', '/wp-includes/'],
+        'Wix' => ['static.wixstatic.com', 'static.parastorage.com'],
+        'Webflow' => ['data-wf-site', 'assets.website-files.com'],
+        'Next.js' => ['/_next/static/', '__NEXT_DATA__'],
+        'Nuxt' => ['/_nuxt/', '__NUXT__'],
+        'Laravel (Inertia)' => ['data-page="{&quot;component&quot;', "data-page='{\"component\""],
+        'Laravel (Livewire)' => ['livewire.js', 'wire:id=', '/livewire/'],
     ];
+
+    /** Platformy sklepowe – przy nich domyślnym celem audytu jest sprzedaż. */
+    private const SHOP_PLATFORMS = ['Shopify', 'WooCommerce', 'PrestaShop', 'Magento', 'IdoSell', 'Shoper'];
 
     /** @param string|null $goal sales|leads|mixed; null = wykryj (sklep → sales, inne → leads) */
     public function audit(string $url, ?string $goal = null): array
@@ -61,7 +73,8 @@ class TrackingAuditor
         $html = $response->body();
         $finalUrl = $this->finalUrl($response, $url);
 
-        $detected = $this->detectTags($html);
+        $code = $this->codeOnly($html);
+        $detected = $this->detectTags($html, $code);
         $containers = [];
         foreach ($detected['gtm'] as $gtmId) {
             $containers[$gtmId] = $this->inspectGtmContainer($gtmId);
@@ -74,8 +87,8 @@ class TrackingAuditor
 
         $pagespeed = config('adpilot.pagespeed.enabled') ? $this->pagespeed($finalUrl) : null;
 
-        $platform = $this->detectPlatform($html);
-        $goal ??= in_array($platform, [null, 'WordPress'], true) ? 'leads' : 'sales';
+        $platform = $this->detectPlatform($html, $code, $response);
+        $goal ??= in_array($platform, self::SHOP_PLATFORMS, true) ? 'sales' : 'leads';
 
         $checks = $this->buildChecks($html, $finalUrl, $detected, $containers, $robots, $sitemap, $responseMs, $pagespeed, $goal);
 
@@ -95,7 +108,7 @@ class TrackingAuditor
 
     // ---------------------------------------------------------------- wykrywanie
 
-    private function detectTags(string $html): array
+    private function detectTags(string $html, string $code): array
     {
         $unique = fn (array $m) => array_values(array_unique($m));
 
@@ -112,21 +125,21 @@ class TrackingAuditor
             'Pinterest Tag' => 's.pinimg.com/ct',
             'Microsoft Ads (UET)' => 'bat.bing.com',
             'LinkedIn Insight' => 'snap.licdn.com',
-            'Criteo' => 'criteo',
-            'Ceneo zaufane opinie' => 'ceneo',
-            'Trusted Shops' => 'trustedshops',
-            'Klaviyo' => 'klaviyo',
-            'GetResponse' => 'getresponse',
+            'Criteo' => 'criteo.net',
+            'Ceneo zaufane opinie' => 'ssl.ceneo.pl',
+            'Trusted Shops' => 'widgets.trustedshops.com',
+            'Klaviyo' => 'static.klaviyo.com',
+            'GetResponse' => 'getresponse.com',
         ];
         foreach ($map as $name => $needle) {
-            if (Str::contains($html, $needle, true)) {
+            if (Str::contains($code, $needle, true)) {
                 $others[] = $name;
             }
         }
 
         $cmp = [];
         foreach (self::CMP_SIGNATURES as $name => $needles) {
-            if (Str::contains($html, $needles, true)) {
+            if (Str::contains($code, $needles, true)) {
                 $cmp[] = $name;
             }
         }
@@ -185,12 +198,60 @@ class TrackingAuditor
         ];
     }
 
-    private function detectPlatform(string $html): ?string
+    /**
+     * Kod strony bez widocznego tekstu: same znaczniki (z atrybutami) + zawartość skryptów.
+     * Dzięki temu słowo „WooCommerce” w treści artykułu nie uruchamia wykrywania platformy.
+     */
+    private function codeOnly(string $html): string
     {
+        preg_match_all('#<script\b[^>]*>(.*?)</script>#is', $html, $scripts);
+        preg_match_all('#<[a-z!][^>]*>#i', $html, $tags);
+
+        return implode("\n", $tags[0])."\n".implode("\n", $scripts[1]);
+    }
+
+    private function detectPlatform(string $html, string $code, Response $response): ?string
+    {
+        // 1) meta generator – deklaracja samej platformy
+        if (preg_match('#<meta[^>]+name=["\']generator["\'][^>]*content=["\']([^"\']+)#i', $html, $m)
+            || preg_match('#<meta[^>]+content=["\']([^"\']+)["\'][^>]*name=["\']generator["\']#i', $html, $m)) {
+            $gen = strtolower($m[1]);
+            foreach (['woocommerce' => 'WooCommerce', 'prestashop' => 'PrestaShop', 'shopify' => 'Shopify', 'shoper' => 'Shoper',
+                'idosell' => 'IdoSell', 'magento' => 'Magento', 'wix' => 'Wix', 'webflow' => 'Webflow', 'joomla' => 'Joomla',
+                'drupal' => 'Drupal', 'wordpress' => 'WordPress'] as $needle => $name) {
+                if (str_contains($gen, $needle)) {
+                    // WordPress z wtyczką WooCommerce ma własne sygnatury w kodzie
+                    if ($name === 'WordPress' && Str::contains($code, self::PLATFORMS['WooCommerce'], true)) {
+                        return 'WooCommerce';
+                    }
+
+                    return $name;
+                }
+            }
+        }
+
+        // 2) sygnatury w kodzie (bez widocznego tekstu)
         foreach (self::PLATFORMS as $name => $needles) {
-            if (Str::contains($html, $needles, true)) {
+            if (Str::contains($code, $needles, true)) {
                 return $name;
             }
+        }
+
+        // 3) nagłówki serwera i ciasteczka
+        $h = array_change_key_case($response->headers(), CASE_LOWER);
+        $cookies = strtolower(implode(';', $h['set-cookie'] ?? []));
+        $powered = strtolower((string) $response->header('X-Powered-By'));
+        if ($response->header('X-Shopify-Stage') || $response->header('X-ShopId')) {
+            return 'Shopify';
+        }
+        if (str_contains($powered, 'next.js')) {
+            return 'Next.js';
+        }
+        if (str_contains($cookies, 'laravel_session') || str_contains($cookies, 'xsrf-token')) {
+            return 'Laravel';
+        }
+        if (str_contains($cookies, 'prestashop-')) {
+            return 'PrestaShop';
         }
 
         return null;

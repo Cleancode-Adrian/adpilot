@@ -101,7 +101,7 @@ class AdPilotTest extends TestCase
                 <script src="https://consent.cookiebot.com/uc.js"></script>
                 <script>gtag("consent","default",{ad_storage:"denied",ad_user_data:"denied"});</script>
                 <script>(function(w,d,s,l,i){})(window,document,"script","dataLayer","GTM-ABC1234");</script>
-                </head><body class="woocommerce"></body></html>'),
+                <link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/woocommerce.css"></head><body><p>Piszemy też o Shopify i PrestaShop.</p></body></html>'),
             'www.googletagmanager.com/*' => Http::response('{"vtp_measurementId":"G-TEST12345","vtp_conversionId":"987654321","function":"__awct","x":"__gclidw","e":"purchase"}'),
             '*' => Http::response('', 404),
         ]);
@@ -249,5 +249,17 @@ class AdPilotTest extends TestCase
         $checks = collect(app(\App\Services\SystemStatus::class)->checks())->keyBy('label');
         $this->assertSame('ok', $checks['Harmonogram (cron)']['status']);
         $this->assertContains($checks['Kolejka (worker)']['status'], ['ok', 'warn']);
+    }
+
+    public function test_platform_is_not_detected_from_page_text(): void
+    {
+        config(['adpilot.pagespeed.enabled' => false]);
+        Http::fake([
+            'https://zlecenia.pl' => Http::response('<html><head><title>Zlecenia</title></head><body><h2>Sklepy WooCommerce, Shopify, PrestaShop</h2><p>woocommerce wordpress magento</p><div id="app" data-page="{&quot;component&quot;:&quot;Home&quot;}"></div></body></html>', 200, ['Set-Cookie' => 'laravel_session=abc; path=/']),
+            '*' => Http::response('', 404),
+        ]);
+        $r = app(TrackingAuditor::class)->audit('https://zlecenia.pl');
+        $this->assertSame('Laravel (Inertia)', $r['platform']);
+        $this->assertSame('leads', $r['goal']);
     }
 }
