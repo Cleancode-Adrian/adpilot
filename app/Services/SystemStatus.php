@@ -15,19 +15,21 @@ class SystemStatus
     public const HEARTBEAT_KEY = 'scheduler';
     public const WORKER_KEY = 'worker';
 
-    /** Zapisuje „żyję” dla harmonogramu/workera – plik w storage, niezależny od cache. */
+    /**
+     * Zapisuje „żyję” dla harmonogramu/workera – w bazie (tabela settings), więc nie zależy
+     * od cache ani od uprawnień plików (cron i worker działają jako różni użytkownicy systemu).
+     */
     public static function beat(string $key): void
     {
-        $dir = storage_path('framework/heartbeats');
-        File::ensureDirectoryExists($dir);
-        @file_put_contents("$dir/$key", (string) time());
-        @chmod("$dir/$key", 0664);
+        DB::table('settings')->upsert(
+            [['key' => "heartbeat.$key", 'value' => (string) time(), 'created_at' => now(), 'updated_at' => now()]],
+            ['key'], ['value', 'updated_at'],
+        );
     }
 
     public static function lastBeat(string $key): ?\Carbon\Carbon
     {
-        $file = storage_path("framework/heartbeats/$key");
-        $ts = is_file($file) ? (int) trim((string) @file_get_contents($file)) : 0;
+        $ts = (int) DB::table('settings')->where('key', "heartbeat.$key")->value('value');
 
         return $ts > 0 ? \Carbon\Carbon::createFromTimestamp($ts) : null;
     }

@@ -31,7 +31,7 @@ class Setting extends Model
     {
         return Cache::rememberForever('adpilot.settings', function () {
             try {
-                $db = static::query()->pluck('value', 'key')->all();
+                $db = static::query()->where('key', 'not like', 'heartbeat.%')->pluck('value', 'key')->all();
             } catch (Throwable) {
                 $db = []; // przed migracją
             }
