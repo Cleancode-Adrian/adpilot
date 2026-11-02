@@ -262,4 +262,27 @@ class AdPilotTest extends TestCase
         $this->assertSame('Laravel (Inertia)', $r['platform']);
         $this->assertSame('leads', $r['goal']);
     }
+
+    public function test_invite_shows_link_when_mail_fails(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1, 'mail.mailers.smtp.timeout' => 2]);
+
+        $this->post('/admin/team', ['name' => 'Jan Test', 'email' => 'jan@example.com'])
+            ->assertRedirect()
+            ->assertSessionHas('error')
+            ->assertSessionHas('invite_link', fn ($link) => str_contains($link, '/reset-password/'));
+        $this->assertDatabaseHas('users', ['email' => 'jan@example.com']);
+    }
+
+    public function test_invite_sends_mail(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        $this->post('/admin/team', ['name' => 'Ola Test', 'email' => 'ola@example.com'])->assertSessionHas('success');
+        $user = User::where('email', 'ola@example.com')->first();
+        \Illuminate\Support\Facades\Notification::assertSentTo($user, \Illuminate\Auth\Notifications\ResetPassword::class);
+        $this->post("/admin/team/{$user->id}/invite")->assertSessionHas('success');
+    }
 }

@@ -51,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('settings', [AdminController::class, 'updateSettings'])->name('settings.update');
         Route::get('team', [AdminController::class, 'team'])->name('team');
         Route::post('team', [AdminController::class, 'storeUser'])->name('team.store');
+        Route::post('team/{user}/invite', [AdminController::class, 'resendInvite'])->name('team.invite');
         Route::patch('team/{user}', [AdminController::class, 'updateUser'])->name('team.update');
         Route::delete('team/{user}', [AdminController::class, 'destroyUser'])->name('team.destroy');
     });

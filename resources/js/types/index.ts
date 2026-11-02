@@ -25,7 +25,7 @@ export interface NavItem {
 export interface SharedData {
     name: string;
     quote?: { message: string; author: string };
-    flash: { success?: string | null; error?: string | null };
+    flash: { success?: string | null; error?: string | null; invite_link?: string | null };
     brand: Brand;
     admin: { problems: number } | null;
     auth: Auth;

@@ -107,9 +107,34 @@ class AdminController extends Controller
             'is_admin' => 'boolean',
         ]);
         $user = User::create($data + ['password' => Str::password(32), 'email_verified_at' => now()]);
-        Password::sendResetLink(['email' => $user->email]);
 
-        return back()->with('success', "Dodano {$user->name}. Zaproszenie z linkiem do ustawienia hasła wysłano na {$user->email}.");
+        return $this->invite($user, "Dodano {$user->name}.");
+    }
+
+    public function resendInvite(User $user)
+    {
+        return $this->invite($user, 'Wysłano ponownie.');
+    }
+
+    /**
+     * Wysyła e-mail z linkiem do ustawienia hasła. Gdy poczta nie działa (np. brak SMTP),
+     * nie wywraca strony – pokazuje link do ręcznego przekazania (ważny tyle co zwykły reset).
+     */
+    private function invite(User $user, string $prefix)
+    {
+        $token = Password::broker()->createToken($user);
+        try {
+            $user->sendPasswordResetNotification($token);
+
+            return back()->with('success', "$prefix Link do ustawienia hasła wysłano na {$user->email}.");
+        } catch (Throwable $e) {
+            report($e);
+            $link = url(route('password.reset', ['token' => $token, 'email' => $user->email], false));
+
+            return back()
+                ->with('error', "$prefix Nie udało się wysłać e-maila (".Str::limit($e->getMessage(), 140).'). Przekaż link poniżej ręcznie i sprawdź ustawienia poczty w Statusie.')
+                ->with('invite_link', $link);
+        }
     }
 
     public function updateUser(Request $request, User $user)

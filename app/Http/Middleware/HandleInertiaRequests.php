@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'invite_link' => fn () => $request->session()->get('invite_link'),
             ],
             'brand' => fn () => \App\Models\Setting::brand(),
             'admin' => fn () => $request->user()?->is_admin ? [
