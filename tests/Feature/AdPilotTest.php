@@ -239,4 +239,15 @@ class AdPilotTest extends TestCase
         $this->assertSame('https://projekciarz.pl', Client::normalizeUrl('https://https/projekciarz.pl'));
         $this->assertSame('https://httpbin.org', Client::normalizeUrl('httpbin.org'));
     }
+
+    public function test_heartbeats_survive_cache_clear_and_show_in_status(): void
+    {
+        \App\Services\SystemStatus::beat(\App\Services\SystemStatus::HEARTBEAT_KEY);
+        (new \App\Jobs\HeartbeatJob)->handle();
+        \Illuminate\Support\Facades\Cache::flush();
+
+        $checks = collect(app(\App\Services\SystemStatus::class)->checks())->keyBy('label');
+        $this->assertSame('ok', $checks['Harmonogram (cron)']['status']);
+        $this->assertContains($checks['Kolejka (worker)']['status'], ['ok', 'warn']);
+    }
 }

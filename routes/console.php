@@ -116,7 +116,7 @@ Artisan::command('adpilot:backup {--keep=14}', function () {
 // ------------------------------------------------------------------ Harmonogram
 // Na VPS: kontener "scheduler" (schedule:work) albo cron "* * * * * php artisan schedule:run"
 
-Schedule::call(fn () => Cache::put(SystemStatus::HEARTBEAT_KEY, now(), now()->addDay()))->everyMinute()->name('adpilot-heartbeat');
+Schedule::call(fn () => SystemStatus::beat(SystemStatus::HEARTBEAT_KEY))->everyMinute()->name('adpilot-heartbeat')->evenInMaintenanceMode();
 Schedule::job(new HeartbeatJob)->everyFiveMinutes()->name('adpilot-worker-heartbeat');
 
 Schedule::call(fn () => Client::active()->get()->each(fn ($c) => SyncClientJob::dispatch($c)))

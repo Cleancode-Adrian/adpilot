@@ -12,8 +12,25 @@ use Illuminate\Support\Facades\File;
 /** Stan systemu: co jest skonfigurowane/połączone, a co wymaga uwagi. */
 class SystemStatus
 {
-    public const HEARTBEAT_KEY = 'adpilot.scheduler.heartbeat';
-    public const WORKER_KEY = 'adpilot.worker.heartbeat';
+    public const HEARTBEAT_KEY = 'scheduler';
+    public const WORKER_KEY = 'worker';
+
+    /** Zapisuje „żyję” dla harmonogramu/workera – plik w storage, niezależny od cache. */
+    public static function beat(string $key): void
+    {
+        $dir = storage_path('framework/heartbeats');
+        File::ensureDirectoryExists($dir);
+        @file_put_contents("$dir/$key", (string) time());
+        @chmod("$dir/$key", 0664);
+    }
+
+    public static function lastBeat(string $key): ?\Carbon\Carbon
+    {
+        $file = storage_path("framework/heartbeats/$key");
+        $ts = is_file($file) ? (int) trim((string) @file_get_contents($file)) : 0;
+
+        return $ts > 0 ? \Carbon\Carbon::createFromTimestamp($ts) : null;
+    }
 
     public function checks(): array
     {
@@ -31,15 +48,15 @@ class SystemStatus
             'Na serwerze: APP_ENV=production i APP_DEBUG=false (inaczej błędy pokażą dane konfiguracyjne).');
         $add('Serwer', 'Baza danych', 'ok', config('database.default').' – '.Client::count().' klientów');
 
-        $beat = Cache::get(self::HEARTBEAT_KEY);
-        $add('Serwer', 'Harmonogram (cron)', $beat && now()->diffInMinutes($beat) < 5 ? 'ok' : 'fail',
+        $beat = self::lastBeat(self::HEARTBEAT_KEY);
+        $add('Serwer', 'Harmonogram (cron)', $beat && abs(now()->diffInMinutes($beat)) < 5 ? 'ok' : 'fail',
             $beat ? 'Ostatnie uruchomienie: '.$beat->diffForHumans() : 'Nigdy nie uruchomiony',
             'Uruchom "php artisan schedule:work" (Docker: kontener scheduler) albo cron "* * * * * php artisan schedule:run".');
 
-        $worker = Cache::get(self::WORKER_KEY);
+        $worker = self::lastBeat(self::WORKER_KEY);
         $pending = DB::table('jobs')->count();
         $failed = DB::table('failed_jobs')->count();
-        $workerOk = $worker && now()->diffInMinutes($worker) < 15;
+        $workerOk = $worker && abs(now()->diffInMinutes($worker)) < 15;
         $add('Serwer', 'Kolejka (worker)', $workerOk ? ($failed ? 'warn' : 'ok') : 'fail',
             ($worker ? 'Ostatnie zadanie: '.$worker->diffForHumans() : 'Brak sygnału z workera')."; w kolejce: $pending, nieudane: $failed",
             $workerOk ? ($failed ? 'Sprawdź nieudane zadania: php artisan queue:failed' : null) : 'Uruchom "php artisan queue:work" (Docker: kontener worker). Bez tego nie działają audyty, synchronizacja i raporty.');
