@@ -148,7 +148,7 @@ export default function Integrations({
                 )}
             </Section>
 
-            <Section title="Meta (Facebook / Instagram Ads)" description="Wydatki, wyniki kampanii i reklam, częstotliwość, zakupy z Pixela/CAPI." actions={<Status integration={meta} />}>
+            <Section title="Meta (Facebook / Instagram Ads)" description={`Wydatki, kliknięcia, wyniki kampanii i reklam, częstotliwość, ${client.goal === "leads" ? "kontakty (formularze, rejestracje)" : client.goal === "mixed" ? "zakupy i kontakty" : "zakupy"} z Pixela/CAPI.`} actions={<Status integration={meta} />}>
                 {!client.meta_configured ? (
                     <SetupHint
                         lines={[
