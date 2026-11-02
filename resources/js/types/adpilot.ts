@@ -189,7 +189,7 @@ export interface Audit {
 
 export interface ReportRow {
     id: number;
-    type: 'client' | 'internal';
+    type: 'client' | 'internal' | 'work';
     period_start: string;
     period_end: string;
     ai_model: string | null;

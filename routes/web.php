@@ -39,6 +39,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('clients/{client}/reports', [ReportController::class, 'index'])->name('clients.reports');
     Route::post('clients/{client}/reports', [ReportController::class, 'store'])->name('clients.reports.store');
+    Route::post('clients/{client}/work-reports', [ReportController::class, 'storeWork'])->name('clients.work-reports.store');
+    Route::put('reports/{report}/work', [ReportController::class, 'updateWork'])->name('reports.work.update');
+    Route::post('reports/{report}/work/refresh', [ReportController::class, 'refreshWork'])->name('reports.work.refresh');
     Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
     Route::patch('reports/{report}/note', [ReportController::class, 'updateNote'])->name('reports.note');
     Route::post('reports/{report}/send', [ReportController::class, 'send'])->name('reports.send');

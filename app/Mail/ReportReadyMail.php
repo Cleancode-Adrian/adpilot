@@ -18,7 +18,9 @@ class ReportReadyMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Raport z działań reklamowych: '.$this->report->period_start->format('d.m.Y').' – '.$this->report->period_end->format('d.m.Y'),
+            subject: $this->report->type === 'work'
+                ? 'Raport z prac – '.$this->report->client->name.' – '.\App\Services\Reports\WorkReportBuilder::monthLabel($this->report->period_start)
+                : 'Raport z działań reklamowych: '.$this->report->period_start->format('d.m.Y').' – '.$this->report->period_end->format('d.m.Y'),
         );
     }
 

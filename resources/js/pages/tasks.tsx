@@ -137,8 +137,8 @@ export default function Tasks({
                     <EmptyState title="Brak zadań dla wybranych filtrów" />
                 ) : grouped ? (
                     <div className="grid gap-4">
-                        {groups.map((g, i) => (
-                            <ClientGroup key={g.id} id={g.id} name={g.name} items={g.items} defaultOpen={i < 3} />
+                        {groups.map((g) => (
+                            <ClientGroup key={g.id} id={g.id} name={g.name} items={g.items} defaultOpen={false} />
                         ))}
                     </div>
                 ) : (

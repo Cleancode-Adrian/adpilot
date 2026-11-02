@@ -6,64 +6,100 @@ import ClientLayout from '@/layouts/client-layout';
 import { date, dateTime } from '@/lib/format';
 import { type ClientProps, type ReportRow } from '@/types/adpilot';
 import { Link, router, useForm } from '@inertiajs/react';
-import { Download, ExternalLink, FileText, RefreshCw } from 'lucide-react';
+import { ClipboardCheck, Download, ExternalLink, FileText, RefreshCw } from 'lucide-react';
+
+const MONTHS = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
+const monthLabel = (p: string) => `${MONTHS[Number(p.slice(5, 7)) - 1]} ${p.slice(0, 4)}`;
+const TYPES: Record<ReportRow['type'], string> = { work: 'Raport z prac', client: 'Reklamy – dla klienta', internal: 'Reklamy – plan działań' };
 
 export default function Reports({
     client,
     reports,
     defaults,
     ai_enabled,
+    workMonths,
 }: {
     client: ClientProps;
     reports: ReportRow[];
     defaults: { from: string; to: string };
     ai_enabled: boolean;
+    workMonths: { period: string; done: number }[];
 }) {
     const form = useForm({ type: 'client', from: defaults.from, to: defaults.to, send: false as boolean });
+    const work = useForm({ month: workMonths[0]?.period ?? '' });
 
     return (
         <ClientLayout client={client} title="Raporty">
             <Section
-                title="Nowy raport"
-                description={
-                    ai_enabled
-                        ? 'Raport z komentarzem napisanym przez AI na podstawie danych i wykonanych zadań.'
-                        : 'Komentarz zostanie wygenerowany z szablonu. Dodaj ANTHROPIC_API_KEY w .env, aby komentarze pisało AI.'
-                }
+                title="Raport z prac"
+                description="Lista wykonanych zadań z miesiąca + Twój opis. Przed wysłaniem możesz wszystko poprawić, dopisać i usunąć."
             >
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();
-                        form.post(`/clients/${client.id}/reports`, { preserveScroll: true });
+                        work.post(`/clients/${client.id}/work-reports`);
                     }}
                     className="flex flex-wrap items-end gap-3"
                 >
                     <div className="grid gap-1.5">
-                        <Label>Typ</Label>
-                        <NativeSelect value={form.data.type} onChange={(e) => form.setData('type', e.target.value)}>
-                            <option value="client">Dla klienta (ruch + wyniki reklam)</option>
-                            <option value="internal">Wewnętrzny (plan działań)</option>
+                        <Label>Miesiąc</Label>
+                        <NativeSelect value={work.data.month} onChange={(e) => work.setData('month', e.target.value)}>
+                            {workMonths.map((m) => (
+                                <option key={m.period} value={m.period}>
+                                    {monthLabel(m.period)} – wykonane: {m.done}
+                                </option>
+                            ))}
                         </NativeSelect>
                     </div>
-                    <div className="grid gap-1.5">
-                        <Label>Od</Label>
-                        <Input type="date" value={form.data.from} onChange={(e) => form.setData('from', e.target.value)} />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label>Do</Label>
-                        <Input type="date" value={form.data.to} onChange={(e) => form.setData('to', e.target.value)} />
-                    </div>
-                    {form.data.type === 'client' && client.contact_email && (
-                        <label className="flex h-9 items-center gap-2 text-sm">
-                            <input type="checkbox" checked={form.data.send} onChange={(e) => form.setData('send', e.target.checked)} />
-                            Wyślij na {client.contact_email}
-                        </label>
-                    )}
-                    <Button type="submit" disabled={form.processing}>
-                        <FileText className="size-4" /> Generuj
+                    <Button type="submit" disabled={work.processing}>
+                        <ClipboardCheck className="size-4" /> Utwórz raport z prac
                     </Button>
                 </form>
             </Section>
+
+            {client.has_ads && (
+                <Section
+                    title="Raport z reklam"
+                    description={
+                        ai_enabled
+                            ? 'Raport z komentarzem napisanym przez AI na podstawie danych i wykonanych zadań.'
+                            : 'Komentarz zostanie wygenerowany z szablonu. Dodaj ANTHROPIC_API_KEY w .env, aby komentarze pisało AI.'
+                    }
+                >
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            form.post(`/clients/${client.id}/reports`, { preserveScroll: true });
+                        }}
+                        className="flex flex-wrap items-end gap-3"
+                    >
+                        <div className="grid gap-1.5">
+                            <Label>Typ</Label>
+                            <NativeSelect value={form.data.type} onChange={(e) => form.setData('type', e.target.value)}>
+                                <option value="client">Dla klienta (ruch + wyniki reklam)</option>
+                                <option value="internal">Wewnętrzny (plan działań)</option>
+                            </NativeSelect>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Od</Label>
+                            <Input type="date" value={form.data.from} onChange={(e) => form.setData('from', e.target.value)} />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Do</Label>
+                            <Input type="date" value={form.data.to} onChange={(e) => form.setData('to', e.target.value)} />
+                        </div>
+                        {form.data.type === 'client' && client.contact_email && (
+                            <label className="flex h-9 items-center gap-2 text-sm">
+                                <input type="checkbox" checked={form.data.send} onChange={(e) => form.setData('send', e.target.checked)} />
+                                Wyślij na {client.contact_email}
+                            </label>
+                        )}
+                        <Button type="submit" disabled={form.processing}>
+                            <FileText className="size-4" /> Generuj
+                        </Button>
+                    </form>
+                </Section>
+            )}
 
             <Section
                 title="Wygenerowane raporty"
@@ -91,17 +127,25 @@ export default function Reports({
                                 <tr key={r.id} className="border-b last:border-0">
                                     <td className="py-2">
                                         <Link href={`/reports/${r.id}`} className="font-medium hover:underline">
-                                            {date(r.period_start)} – {date(r.period_end)}
+                                            {r.type === 'work'
+                                                ? monthLabel(r.period_start.slice(0, 7))
+                                                : `${date(r.period_start)} – ${date(r.period_end)}`}
                                         </Link>
                                         <div className="text-muted-foreground text-xs">utworzono {dateTime(r.created_at)}</div>
                                     </td>
-                                    <td className="py-2">{r.type === 'client' ? 'Dla klienta' : 'Plan działań'}</td>
+                                    <td className="py-2">{TYPES[r.type]}</td>
                                     <td className="text-muted-foreground py-2 text-xs">
-                                        {r.ai_model === 'szablon' ? 'szablon' : r.ai_model ? `AI (${r.ai_model})` : '–'}
+                                        {r.type === 'work'
+                                            ? 'Twój opis'
+                                            : r.ai_model === 'szablon'
+                                              ? 'szablon'
+                                              : r.ai_model
+                                                ? `AI (${r.ai_model})`
+                                                : '–'}
                                     </td>
                                     <td className="py-2 text-xs">{r.sent_at ? dateTime(r.sent_at) : '–'}</td>
                                     <td className="py-2 text-right">
-                                        {r.type === 'client' && (
+                                        {r.type !== 'internal' && (
                                             <div className="inline-flex gap-1">
                                                 <Button variant="ghost" size="sm" asChild>
                                                     <a href={r.public_url} target="_blank" rel="noreferrer" title="Link dla klienta">

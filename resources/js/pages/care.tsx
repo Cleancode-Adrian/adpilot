@@ -90,8 +90,8 @@ export default function CareOverview({
                     </EmptyState>
                 ) : (
                     <div className="grid gap-3">
-                        {rows.map((r, i) => (
-                            <ClientCare key={r.client.id} row={r} defaultOpen={i < 5 && r.summary.total - r.summary.done + r.summary.overdue > 0} />
+                        {rows.map((r) => (
+                            <ClientCare key={r.client.id} row={r} defaultOpen={false} />
                         ))}
                     </div>
                 )}

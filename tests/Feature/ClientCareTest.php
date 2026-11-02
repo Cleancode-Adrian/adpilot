@@ -260,4 +260,53 @@ class ClientCareTest extends TestCase
 
         $this->patch("/care/tasks/{$oneOff->id}", ['due_date' => 'nie-data'])->assertSessionHasErrors('due_date');
     }
+
+    public function test_monthly_work_report(): void
+    {
+        $this->actingAs($admin = $this->admin());
+        $client = $this->client();
+        $client->update(['contact_email' => 'klient@example.com', 'has_general' => true]);
+        $period = now()->format('Y-m');
+
+        $done = $client->careTasks()->create(['title' => 'Aktualizacja wtyczek', 'period' => $period, 'due_date' => now()->toDateString(),
+            'status' => 'done', 'done_at' => now(), 'done_by' => $admin->id, 'note' => 'Zaktualizowano 12 wtyczek']);
+        $client->careTasks()->create(['title' => 'Niezrobione', 'period' => $period, 'due_date' => now()->toDateString()]);
+
+        $this->get("/clients/{$client->id}/reports")->assertOk()->assertInertia(fn ($p) => $p->where('workMonths.0.period', $period)->where('workMonths.0.done', 1));
+
+        $this->post("/clients/{$client->id}/work-reports", ['month' => $period])->assertRedirect();
+        $report = $client->reports()->where('type', 'work')->first();
+        $this->assertCount(1, $report->data['items']);
+        $this->assertSame('Zaktualizowano 12 wtyczek', $report->data['items'][0]['description']);
+        $this->get("/reports/{$report->id}")->assertOk()->assertInertia(fn ($p) => $p->component('reports/work'));
+
+        // edycja: opis + pozycja ręczna; zadania zostają bez zmian
+        $this->put("/reports/{$report->id}/work", [
+            'note' => "W tym miesiącu **zaktualizowaliśmy** stronę.\n\n- punkt <script>alert(1)</script>",
+            'items' => [
+                ['task_id' => $done->id, 'title' => 'Aktualizacja WordPressa i wtyczek', 'description' => 'WP 6.9', 'date' => now()->toDateString()],
+                ['title' => 'Konsultacja telefoniczna', 'description' => '', 'date' => null],
+            ],
+        ])->assertRedirect();
+        $this->assertSame('Aktualizacja wtyczek', $done->fresh()->title);
+
+        // nowo wykonane zadanie dochodzi po „odśwież”, bez duplikatów
+        $client->careTasks()->where('title', 'Niezrobione')->update(['status' => 'done', 'done_at' => now()]);
+        $this->post("/reports/{$report->id}/work/refresh");
+        $this->assertCount(3, $report->fresh()->data['items']);
+        $this->post("/reports/{$report->id}/work/refresh");
+        $this->assertCount(3, $report->fresh()->data['items']);
+
+        // publiczny link i PDF
+        $this->get("/r/{$client->report_token}/{$report->id}")->assertOk()
+            ->assertSee('Raport z prac')->assertSee('Aktualizacja WordPressa i wtyczek')->assertSee('Konsultacja telefoniczna')
+            ->assertSee('<strong>zaktualizowaliśmy</strong>', false)->assertDontSee('<script>alert(1)</script>', false);
+        $this->get("/r/{$client->report_token}/{$report->id}/pdf")->assertOk();
+        $this->get("/r/zly-token/{$report->id}")->assertNotFound();
+
+        \Illuminate\Support\Facades\Mail::fake();
+        $this->post("/reports/{$report->id}/send")->assertSessionHas('success');
+        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ReportReadyMail::class, fn ($m) => str_contains($m->envelope()->subject, 'Raport z prac'));
+        $this->assertNotNull($report->fresh()->sent_at);
+    }
 }

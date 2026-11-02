@@ -25,6 +25,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                 ...(props.admin
                     ? [{ href: `${base}/credentials`, label: `Dane dostępowe${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
                     : []),
+                { href: `${base}/reports`, label: 'Raporty' },
             ],
         },
         ...(client.has_ads
@@ -36,7 +37,6 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                           { href: `${base}/recommendations`, label: `Zadania reklamowe${client.open_count ? ` (${client.open_count})` : ''}` },
                           { href: `${base}/audit`, label: 'Audyt pomiaru' },
                           { href: `${base}/integrations`, label: 'Integracje' },
-                          { href: `${base}/reports`, label: 'Raporty' },
                       ],
                   },
               ]

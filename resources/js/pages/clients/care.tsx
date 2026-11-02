@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import ClientLayout from '@/layouts/client-layout';
 import { type CareTask, type CareTemplate, type ClientProps } from '@/types/adpilot';
 import { router, useForm } from '@inertiajs/react';
-import { Check, PackagePlus, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, ClipboardCheck, PackagePlus, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 type Frequencies = Record<CareTemplate['frequency'], string>;
@@ -218,7 +218,20 @@ export default function Care({
                     <Section
                         title="Zadania w miesiącu"
                         description="Odhacz po wykonaniu. Rozwiń zadanie, żeby zobaczyć checklistę i dopisać notatkę z wykonania."
-                        actions={<MonthSwitcher period={period} onChange={go} />}
+                        actions={
+                            <div className="flex flex-wrap items-center gap-2">
+                                <MonthSwitcher period={period} onChange={go} />
+                                {done > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => router.post(`/clients/${client.id}/work-reports`, { month: period })}
+                                    >
+                                        <ClipboardCheck className="size-4" /> Raport z prac
+                                    </Button>
+                                )}
+                            </div>
+                        }
                     >
                         {tasks.length > 0 && (
                             <div className="mb-3">
