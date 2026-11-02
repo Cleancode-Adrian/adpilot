@@ -8,6 +8,7 @@ use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\RecommendationController;
+use App\Http\Controllers\WordPressController;
 use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('clients/{client}/care/preset', [CareController::class, 'applyPreset'])->name('care.preset');
     Route::patch('care/templates/{template}', [CareController::class, 'updateTemplate'])->name('care.templates.update');
     Route::delete('care/templates/{template}', [CareController::class, 'destroyTemplate'])->name('care.templates.destroy');
+
+    // WordPress (wtyczka CC Connector)
+    Route::get('clients/{client}/wordpress', [WordPressController::class, 'index'])->name('clients.wordpress');
+    Route::post('clients/{client}/wordpress/pull', [WordPressController::class, 'pull'])->name('clients.wordpress.pull');
+    Route::post('clients/{client}/wordpress/ack-all', [WordPressController::class, 'acknowledgeAll'])->name('clients.wordpress.ack-all');
+    Route::post('wp-events/{event}/ack', [WordPressController::class, 'acknowledge'])->name('wp-events.ack');
+    Route::middleware('can:admin')->group(function () {
+        Route::post('clients/{client}/wordpress/connect', [WordPressController::class, 'connect'])->name('clients.wordpress.connect');
+        Route::post('clients/{client}/wordpress/regenerate', [WordPressController::class, 'regenerate'])->name('clients.wordpress.regenerate');
+        Route::delete('clients/{client}/wordpress', [WordPressController::class, 'destroy'])->name('clients.wordpress.destroy');
+        Route::get('clients/{client}/wordpress/download', [WordPressController::class, 'download'])->name('clients.wordpress.download');
+    });
 
     // Sejf dostępów – tylko administratorzy; podgląd wymaga ponownego podania hasła (ważne 3 h)
     Route::middleware('can:admin')->group(function () {

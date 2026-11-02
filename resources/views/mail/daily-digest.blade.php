@@ -8,6 +8,16 @@
 @endforeach
 
 @endif
+@if(count($wp ?? []))
+## 🛡 WordPress – do sprawdzenia
+@foreach($wp as $c)
+**[{{ $c['name'] }}]({{ route('clients.wordpress', $c['id']) }})**
+@foreach($c['items'] as $e)
+- {{ $e['severity'] === 'critical' ? '🔴' : '🟠' }} {{ $e['title'] }}
+@endforeach
+
+@endforeach
+@endif
 @if(count($care ?? []))
 ## 🛠 Opieka nad stronami – do zrobienia
 @foreach($care as $c)

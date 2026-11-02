@@ -81,11 +81,15 @@ Artisan::command('adpilot:digest {--force : wyślij nawet gdy nie ma nic pilnego
             'items' => $items->map(fn ($t) => ['title' => $t->title, 'due_date' => $t->due_date, 'overdue' => $t->due_date < now()->toDateString()])->values()->all(),
         ])->values()->all();
 
-    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care,
+    $wp = \App\Models\WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->latest('occurred_at')->get()
+        ->groupBy('client_id')->map(fn ($items) => ['id' => $items->first()->client_id, 'name' => $items->first()->client->name,
+            'items' => $items->take(6)->map(fn ($e) => ['severity' => $e->severity, 'title' => $e->title])->values()->all()])->values()->all();
+
+    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care, 'wp' => $wp,
         'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)
             + \App\Models\CareTask::due(now()->subDay()->toDateString())->whereHas('client', fn ($q) => $q->active())->count()];
 
-    if (! $clients && ! $problems && ! $care && ! $this->option('force')) {
+    if (! $clients && ! $problems && ! $care && ! $wp && ! $this->option('force')) {
         $this->info('Nic pilnego – nie wysyłam.');
 
         return;
@@ -138,6 +142,10 @@ Schedule::call(function () {
 })->weeklyOn(1, '04:00')->name('adpilot-weekly-audit');
 
 Schedule::call(fn () => app(\App\Services\Care\CarePlanner::class)->ensureAll())->dailyAt('00:15')->name('adpilot-care-plan');
+// WordPress: codzienne odpytanie stron (raport + skan plików) i kontrola braku kontaktu
+Schedule::call(fn () => \App\Models\WpSite::where('status', 'connected')->whereHas('client', fn ($q) => $q->active())->get()
+    ->each(fn ($s) => \App\Jobs\PullWpSiteJob::dispatch($s, true)))->dailyAt('06:40')->name('adpilot-wp-pull');
+Schedule::call(fn () => app(\App\Services\WordPress\WpMonitor::class)->checkOffline())->hourly()->name('adpilot-wp-offline');
 Schedule::command('adpilot:digest')->dailyAt('08:00');
 Schedule::command('adpilot:backup')->dailyAt('03:00');
 Schedule::command('adpilot:monthly-reports')->monthlyOn(2, '07:00');

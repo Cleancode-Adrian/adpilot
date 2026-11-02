@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { type ClientProps } from '@/types/adpilot';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlarmClock, ExternalLink, FlaskConical, LogIn, Pencil, RefreshCw } from 'lucide-react';
+import { AlarmClock, ExternalLink, FlaskConical, LogIn, Pencil, RefreshCw, ShieldAlert } from 'lucide-react';
 
 interface Tab {
     href: string;
@@ -25,6 +25,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                 ...(props.admin
                     ? [{ href: `${base}/credentials`, label: `Dane dostępowe${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
                     : []),
+                { href: `${base}/wordpress`, label: `WordPress${client.wp?.alerts ? ` (${client.wp.alerts})` : ''}` },
                 { href: `${base}/reports`, label: 'Raporty' },
             ],
         },
@@ -137,6 +138,30 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                         </div>
                     ))}
                 </nav>
+
+                {client.wp && client.wp.alerts > 0 && path !== `${base}/wordpress` && (
+                    <Link
+                        href={`${base}/wordpress`}
+                        className={cn(
+                            'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm',
+                            client.wp.critical > 0
+                                ? 'border-[#d03b3b]/50 bg-[#d03b3b]/10 hover:bg-[#d03b3b]/15'
+                                : 'border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15',
+                        )}
+                    >
+                        <ShieldAlert
+                            className={cn(
+                                'size-4 shrink-0',
+                                client.wp.critical > 0 ? 'text-[#b42f2f] dark:text-[#f08080]' : 'text-amber-700 dark:text-amber-400',
+                            )}
+                        />
+                        <span>
+                            <strong>WordPress:</strong> {client.wp.alerts} {client.wp.alerts === 1 ? 'zdarzenie' : 'zdarzeń'} do sprawdzenia
+                            {client.wp.critical > 0 && <> (w tym krytyczne: {client.wp.critical})</>}
+                        </span>
+                        <span className="ml-auto font-medium underline-offset-2 hover:underline">Sprawdź →</span>
+                    </Link>
+                )}
 
                 {showCareBanner && (
                     <Link

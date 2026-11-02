@@ -7,11 +7,11 @@ import { Activity, BarChart3, Building2, ListChecks, Palette, PlusCircle, Shield
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { admin, care_due } = usePage<SharedData>().props;
+    const { admin, care_due, wp_alerts } = usePage<SharedData>().props;
 
     // 1) Klienci – dane, logowanie, notatki, zadania  2) Reklamy – wyniki i zadania reklamowe
     const clientItems: NavItem[] = [
-        { title: 'Wszyscy klienci', url: '/clients', icon: Building2 },
+        { title: 'Wszyscy klienci', url: '/clients', icon: Building2, badge: wp_alerts },
         { title: 'Zadania i opieka', url: '/care', icon: ShieldCheck, badge: care_due },
         { title: 'Nowy klient', url: '/clients/create', icon: PlusCircle },
     ];

@@ -29,6 +29,8 @@ class ClientController extends Controller
                 'credentials_count' => $c->credentials_count,
                 'open_count' => $c->has_ads ? $c->open_count : 0,
                 'care' => $c->has_care || $c->has_general ? $planner->summary($c) : null,
+                'wp_alerts' => $c->wpEvents()->alerts()->count(),
+                'wp_connected' => $c->wpSite?->status === 'connected',
             ]);
 
         return Inertia::render('clients/index', [
@@ -167,6 +169,12 @@ class ClientController extends Controller
             'meta_configured' => MetaConnector::configured(),
             'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(\App\Services\Care\CarePlanner::class)->summary($client) : null,
             'credentials_count' => $client->credentials()->count(),
+            'wp' => ($wp = $client->wpSite) ? [
+                'status' => $wp->status,
+                'alerts' => $client->wpEvents()->alerts()->count(),
+                'critical' => $client->wpEvents()->alerts()->where('severity', 'critical')->count(),
+                'updates' => collect($wp->report['plugins'] ?? [])->whereNotNull('update')->count() + collect($wp->report['themes'] ?? [])->whereNotNull('update')->count() + (empty($wp->report['wp_update']) ? 0 : 1),
+            ] : null,
             // Logowanie do panelu strony – bez hasła (to odsłania się osobno, z wpisem w dzienniku)
             'panel' => auth()->user()?->is_admin && ($p = $this->panelCredential($client))
                 ? ['id' => $p->id, 'username' => $p->username, 'url' => $p->url, 'has_secret' => filled($p->getRawOriginal('secret'))]

@@ -19,6 +19,7 @@ import {
     Phone,
     PlusCircle,
     Search,
+    ShieldAlert,
     ShieldCheck,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -41,6 +42,8 @@ interface Row {
     credentials_count: number;
     open_count: number;
     care: CareSummary | null;
+    wp_alerts: number;
+    wp_connected: boolean;
 }
 
 type Filter = 'all' | 'general' | 'care' | 'ads';
@@ -94,6 +97,11 @@ function ClientCard({ c, isAdmin }: { c: Row; isAdmin: boolean }) {
                     )}
                     {c.has_care && (!c.care || c.care.total === 0) && (
                         <div className="text-muted-foreground">Brak planu opieki – ustaw w karcie klienta</div>
+                    )}
+                    {c.wp_alerts > 0 && (
+                        <div className="inline-flex items-center gap-1 font-medium text-[#b42f2f] dark:text-[#f08080]">
+                            <ShieldAlert className="size-3.5" /> WordPress: {c.wp_alerts} do sprawdzenia
+                        </div>
                     )}
                     {c.has_ads && c.open_count > 0 && (
                         <div className="inline-flex items-center gap-1">

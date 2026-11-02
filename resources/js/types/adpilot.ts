@@ -40,6 +40,7 @@ export interface ClientProps {
     meta_configured: boolean;
     care: CareSummary | null;
     credentials_count: number;
+    wp: { status: string; alerts: number; critical: number; updates: number } | null;
     panel: { id: number; username: string | null; url: string | null; has_secret: boolean } | null;
 }
 

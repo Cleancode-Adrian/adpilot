@@ -29,6 +29,7 @@ export interface SharedData {
     brand: Brand;
     admin: { problems: number } | null;
     care_due: number;
+    wp_alerts: number;
     auth: Auth;
     [key: string]: unknown;
 }

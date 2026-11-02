@@ -49,6 +49,8 @@ class HandleInertiaRequests extends Middleware
             'brand' => fn () => \App\Models\Setting::brand(),
             // Licznik w menu „Opieka”: zadania po terminie i na dziś (aktywni klienci)
             'care_due' => fn () => $request->user() ? \App\Models\CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
+            // Alerty WordPress do sprawdzenia (krytyczne i ostrzeżenia) – znaczek przy „Wszyscy klienci”
+            'wp_alerts' => fn () => $request->user() ? \App\Models\WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             'admin' => fn () => $request->user()?->is_admin ? [
                 'problems' => app(\App\Services\SystemStatus::class)->problemCount(),
             ] : null,
