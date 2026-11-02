@@ -85,9 +85,9 @@ export default function ClientForm({
                 <div className="rounded-xl border p-4">
                     <h2 className="mb-4 font-medium">Dane klienta</h2>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        {field('name', 'Nazwa klienta', { required: true, placeholder: 'np. Medoncr' })}
-                        {field('website_url', 'Adres strony', { required: true, placeholder: 'medoncr.com' })}
-                        {field('industry', 'Branża', { placeholder: 'np. usługi medyczne' })}
+                        {field('name', 'Nazwa klienta', { required: true, placeholder: 'np. Pracownia Zielony Ogród' })}
+                        {field('website_url', 'Adres strony', { required: true, placeholder: 'zielony-ogrod.pl' })}
+                        {field('industry', 'Branża', { placeholder: 'np. usługi ogrodnicze' })}
                     </div>
                 </div>
 
@@ -98,7 +98,7 @@ export default function ClientForm({
                         dostępowe.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="sm:col-span-2">{field('admin_url', 'Adres logowania', { placeholder: 'medoncr.com/wp-admin' })}</div>
+                        <div className="sm:col-span-2">{field('admin_url', 'Adres logowania', { placeholder: 'zielony-ogrod.pl/wp-admin' })}</div>
                         {admin ? (
                             <>
                                 {field('panel_login', 'Login', { autoComplete: 'off', placeholder: 'admin' })}
@@ -150,11 +150,11 @@ export default function ClientForm({
                 <div className="rounded-xl border p-4">
                     <h2 className="mb-4 font-medium">Osoba kontaktowa</h2>
                     <div className="grid gap-4 sm:grid-cols-3">
-                        {field('contact_name', 'Imię i nazwisko', { placeholder: 'Jan Kowalski' })}
+                        {field('contact_name', 'Imię i nazwisko', { placeholder: 'Anna Nowak' })}
                         {field(
                             'contact_email',
                             'E-mail',
-                            { type: 'email', placeholder: 'jan@firma.pl' },
+                            { type: 'email', placeholder: 'kontakt@zielony-ogrod.pl' },
                             data.has_ads ? 'Na ten adres idą też raporty' : undefined,
                         )}
                         {field('contact_phone', 'Telefon', { type: 'tel', placeholder: '600 000 000' })}
