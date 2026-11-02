@@ -34,6 +34,13 @@ return [
         ],
     ],
 
+    // Bezpieczeństwo panelu
+    'security' => [
+        'require_2fa' => (bool) env('SECURITY_REQUIRE_2FA', true),           // administrator musi mieć weryfikację dwuetapową
+        'vault_unlock_seconds' => (int) env('VAULT_UNLOCK_SECONDS', 120),      // po potwierdzeniu: tyle sekund widać hasła, potem znów pyta
+        'csp' => env('SECURITY_CSP', 'enforce'),                               // enforce | report | off
+    ],
+
     'ai' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ADPILOT_AI_MODEL', 'claude-opus-5-5'),

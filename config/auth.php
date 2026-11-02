@@ -110,6 +110,7 @@ return [
     |
     */
 
-    'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
+    // wrażliwe strony (dostępy, wtyczka WP, 2FA) – ponowne potwierdzenie po 15 min
+    'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 900),
 
 ];

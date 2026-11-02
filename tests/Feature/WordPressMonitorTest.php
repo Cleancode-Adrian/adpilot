@@ -203,7 +203,8 @@ class WordPressMonitorTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $client = Client::create(['name' => 'K', 'website_url' => 'https://k.example', 'currency' => 'PLN']);
 
-        $res = $this->get("/clients/{$client->id}/wordpress/download")->assertOk();
+        $this->get("/clients/{$client->id}/wordpress/download")->assertRedirect(route('password.confirm'));
+        $res = $this->withSession(['auth.password_confirmed_at' => time()])->get("/clients/{$client->id}/wordpress/download")->assertOk();
         $php = $res->getContent();
         $site = $client->fresh()->wpSite;
         $this->assertStringContainsString("const EMBEDDED_KEY = '".$site->connectionKey()."';", $php);

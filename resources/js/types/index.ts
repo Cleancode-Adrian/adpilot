@@ -30,6 +30,7 @@ export interface SharedData {
     admin: { problems: number } | null;
     care_due: number;
     wp_alerts: number;
+    vault?: { unlocked_until: number | null; seconds: number };
     auth: Auth;
     [key: string]: unknown;
 }
@@ -51,6 +52,7 @@ export interface User {
     avatar?: string;
     email_verified_at: string | null;
     is_admin?: boolean;
+    two_factor_enabled?: boolean;
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...

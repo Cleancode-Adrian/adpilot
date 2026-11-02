@@ -27,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('admin', fn ($user) => (bool) $user->is_admin);
 
+        // Silne hasła: min. 12 znaków, małe i wielkie litery, cyfry, znak specjalny, nie z wycieków (haveibeenpwned – k-anonimowość)
+        \Illuminate\Validation\Rules\Password::defaults(fn () => \Illuminate\Validation\Rules\Password::min(12)->letters()->mixedCase()->numbers()->symbols()
+            ->when(app()->isProduction(), fn ($rule) => $rule->uncompromised()));
+
         Event::listen(Login::class, fn (Login $e) => $e->user->forceFill(['last_login_at' => now()])->saveQuietly());
 
         // Polski e-mail resetu hasła (używany też przy zaproszeniu nowej osoby)

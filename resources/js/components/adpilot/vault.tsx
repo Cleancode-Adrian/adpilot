@@ -1,3 +1,4 @@
+import { withVault } from '@/components/adpilot/vault-unlock';
 import { Button } from '@/components/ui/button';
 import { Check, Copy, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -35,10 +36,6 @@ export const CATEGORY_META: Record<string, { url: string; urlPlaceholder: string
     other: { url: 'Adres', urlPlaceholder: 'https://…', labelPlaceholder: 'np. Panel płatności, CRM, newsletter', userLabel: 'Login' },
 };
 
-/**
- * Odczyt hasła – POST z tokenem CSRF. 423 = minęły 3 h od potwierdzenia hasła do panelu:
- * przechodzimy przez /vault/unlock, które po potwierdzeniu wraca na bieżącą stronę.
- */
 /** POST JSON z tokenem CSRF (fetch – bez okna błędu Inertii). */
 export async function postJson(url: string, body?: unknown): Promise<Response> {
     const xsrf = decodeURIComponent(
@@ -55,24 +52,25 @@ export async function postJson(url: string, body?: unknown): Promise<Response> {
     });
 }
 
+/**
+ * Odczyt hasła. Gdy sejf jest zamknięty (423), pokazuje okno: hasło + kod z aplikacji, potem ponawia.
+ * Anulowanie okna → wyjątek 'cancelled' (wywołujący po prostu nic nie pokazuje).
+ */
 export async function reveal(id: number): Promise<{ secret: string | null; notes: string | null }> {
-    const xsrf = decodeURIComponent(
-        document.cookie
-            .split('; ')
-            .find((c) => c.startsWith('XSRF-TOKEN='))
-            ?.split('=')[1] ?? '',
-    );
-    const res = await fetch(`/credentials/${id}/reveal`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf, 'X-Requested-With': 'XMLHttpRequest' },
-        credentials: 'same-origin',
-    });
-    if (res.status === 423 || res.status === 401) {
-        window.location.href = `/vault/unlock?back=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-        throw new Error('confirm');
-    }
+    const res = await withVault(() => postJson(`/credentials/${id}/reveal`));
+    if (res.status === 419) throw new Error('Sesja wygasła – odśwież stronę (F5).');
     if (!res.ok) throw new Error(String(res.status));
     return res.json();
+}
+
+/** reveal() bez wyjątku – null, gdy anulowano albo błąd. */
+export async function tryReveal(id: number) {
+    try {
+        return await reveal(id);
+    } catch (e) {
+        if (e instanceof Error && e.message !== 'cancelled') alert(`Nie udało się pobrać hasła: ${e.message}`);
+        return null;
+    }
 }
 
 export function generatePassword(len = 20) {
@@ -117,7 +115,8 @@ export function SecretValue({ id, onNotes }: { id: number; onNotes?: (notes: str
             onNotes?.(null);
             return;
         }
-        const r = await reveal(id);
+        const r = await tryReveal(id);
+        if (!r) return;
         setValue(r.secret ?? '');
         onNotes?.(r.notes);
         clearTimeout(timer.current);
@@ -133,7 +132,7 @@ export function SecretValue({ id, onNotes }: { id: number; onNotes?: (notes: str
             <Button type="button" variant="ghost" size="sm" className="h-7 px-2" title={value !== null ? 'Ukryj' : 'Pokaż'} onClick={toggle}>
                 {value !== null ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </Button>
-            <CopyButton value={async () => value ?? (await reveal(id)).secret} label="Kopiuj hasło" />
+            <CopyButton value={async () => value ?? (await tryReveal(id))?.secret ?? null} label="Kopiuj hasło" />
         </span>
     );
 }

@@ -66,20 +66,17 @@ Route::middleware(['auth'])->group(function () {
     Route::post('wp-events/{event}/ack', [WordPressController::class, 'acknowledge'])->name('wp-events.ack');
     Route::middleware('can:admin')->group(function () {
         Route::post('clients/{client}/wordpress/connect', [WordPressController::class, 'connect'])->name('clients.wordpress.connect');
-        Route::post('clients/{client}/wordpress/regenerate', [WordPressController::class, 'regenerate'])->name('clients.wordpress.regenerate');
+        Route::post('clients/{client}/wordpress/regenerate', [WordPressController::class, 'regenerate'])->middleware('password.confirm')->name('clients.wordpress.regenerate');
         Route::delete('clients/{client}/wordpress', [WordPressController::class, 'destroy'])->name('clients.wordpress.destroy');
-        Route::get('clients/{client}/wordpress/download', [WordPressController::class, 'download'])->name('clients.wordpress.download');
+        Route::get('clients/{client}/wordpress/download', [WordPressController::class, 'download'])->middleware('password.confirm')->name('clients.wordpress.download');
     });
 
     // Sejf dostępów – tylko administratorzy; podgląd wymaga ponownego podania hasła (ważne 3 h)
     Route::middleware('can:admin')->group(function () {
-        Route::get('vault/unlock', function (\Illuminate\Http\Request $request) {
-            $back = (string) $request->query('back', '/clients');
-
-            return redirect(str_starts_with($back, '/') && ! str_starts_with($back, '//') ? $back : '/clients');
-        })->middleware('password.confirm')->name('vault.unlock');
+        Route::post('vault/unlock', [\App\Http\Controllers\VaultController::class, 'unlock'])->middleware('throttle:20,1')->name('vault.unlock');
+        Route::post('vault/lock', [\App\Http\Controllers\VaultController::class, 'lock'])->name('vault.lock');
         Route::get('clients/{client}/credentials', [CredentialController::class, 'index'])->middleware('password.confirm')->name('clients.credentials');
-        Route::post('credentials/{credential}/reveal', [CredentialController::class, 'reveal'])->middleware('password.confirm')->name('credentials.reveal');
+        Route::post('credentials/{credential}/reveal', [CredentialController::class, 'reveal'])->middleware('vault.unlocked')->name('credentials.reveal');
         Route::post('clients/{client}/credentials', [CredentialController::class, 'store'])->name('credentials.store');
         Route::put('credentials/{credential}', [CredentialController::class, 'update'])->name('credentials.update');
         Route::delete('credentials/{credential}', [CredentialController::class, 'destroy'])->name('credentials.destroy');
@@ -95,10 +92,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('settings', [AdminController::class, 'settings'])->name('settings');
         Route::post('settings', [AdminController::class, 'updateSettings'])->name('settings.update');
         Route::get('team', [AdminController::class, 'team'])->name('team');
-        Route::post('team', [AdminController::class, 'storeUser'])->name('team.store');
+        Route::post('team', [AdminController::class, 'storeUser'])->middleware('password.confirm')->name('team.store');
         Route::post('team/{user}/invite', [AdminController::class, 'resendInvite'])->name('team.invite');
         Route::patch('team/{user}', [AdminController::class, 'updateUser'])->name('team.update');
-        Route::delete('team/{user}', [AdminController::class, 'destroyUser'])->name('team.destroy');
+        Route::delete('team/{user}', [AdminController::class, 'destroyUser'])->middleware('password.confirm')->name('team.destroy');
     });
 
     // OAuth

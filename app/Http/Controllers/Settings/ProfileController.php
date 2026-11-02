@@ -29,13 +29,21 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $oldEmail = $user->getOriginal('email');
+        $user->fill($request->validated());
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($user->isDirty('email')) {
+            // zmiana adresu = przejęcie konta przez reset hasła byłoby proste – wymagamy hasła
+            $request->validate(['current_password' => ['required', 'current_password']], ['current_password.required' => 'Podaj obecne hasło, aby zmienić adres e-mail.']);
+            $user->email_verified_at = null;
+            \App\Models\SecurityEvent::record('email_changed', $user, $request, ['from' => $oldEmail, 'to' => $user->email]);
+            $tmp = clone $user;
+            $tmp->email = $oldEmail;
+            \App\Services\Security\DeviceGuard::notify($tmp, 'Zmieniono adres e-mail konta', ['Adres e-mail konta zmieniono na: '.$user->email, '**IP:** '.$request->ip()], 'Jeśli to nie Ty – natychmiast skontaktuj się z administratorem.');
         }
 
-        $request->user()->save();
+        $user->save();
 
         return to_route('profile.edit');
     }

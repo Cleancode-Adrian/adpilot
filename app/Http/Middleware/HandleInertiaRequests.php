@@ -51,6 +51,7 @@ class HandleInertiaRequests extends Middleware
             'care_due' => fn () => $request->user() ? \App\Models\CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             // Alerty WordPress do sprawdzenia (krytyczne i ostrzeżenia) – znaczek przy „Wszyscy klienci”
             'wp_alerts' => fn () => $request->user() ? \App\Models\WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->count() : 0,
+            'vault' => fn () => ['unlocked_until' => (int) $request->session()->get('vault.unlocked_until') ?: null, 'seconds' => (int) config('adpilot.security.vault_unlock_seconds')],
             'admin' => fn () => $request->user()?->is_admin ? [
                 'problems' => app(\App\Services\SystemStatus::class)->problemCount(),
             ] : null,

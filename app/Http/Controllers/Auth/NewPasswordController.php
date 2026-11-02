@@ -52,6 +52,11 @@ class NewPasswordController extends Controller
                 ])->save();
 
                 event(new PasswordReset($user));
+                // reset hasła = wylogowanie wszystkich sesji tego konta
+                if (config('session.driver') === 'database') {
+                    \Illuminate\Support\Facades\DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
+                }
+                \App\Models\SecurityEvent::record('password_reset', $user, $request);
             }
         );
 

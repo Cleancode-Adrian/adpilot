@@ -1,5 +1,5 @@
 import { NativeSelect, Section } from '@/components/adpilot/ui';
-import { CATEGORY_META, CopyButton, generatePassword, reveal, SecretValue } from '@/components/adpilot/vault';
+import { CATEGORY_META, CopyButton, generatePassword, SecretValue, tryReveal } from '@/components/adpilot/vault';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,8 +99,8 @@ function CredentialForm({
 
     useEffect(() => {
         if (editing?.has_notes) {
-            reveal(editing.id)
-                .then((r) => form.setData((d) => ({ ...d, notes: r.notes ?? '', notes_changed: true })))
+            tryReveal(editing.id)
+                .then((r) => (r ? form.setData((d) => ({ ...d, notes: r.notes ?? '', notes_changed: true })) : onDone()))
                 .finally(() => setLoadingNotes(false));
         } else if (editing) {
             form.setData('notes_changed', true);
@@ -252,7 +252,7 @@ function CredentialRow({ c, categoryLabel, onEdit }: { c: Credential; categoryLa
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2"
-                            onClick={async () => setNotes(notes ? null : (await reveal(c.id)).notes)}
+                            onClick={async () => setNotes(notes ? null : ((await tryReveal(c.id))?.notes ?? null))}
                         >
                             <Eye className="size-4" /> notatki
                         </Button>

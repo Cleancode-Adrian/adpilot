@@ -177,7 +177,7 @@ class AdPilotTest extends TestCase
         $admin = User::where('email', 'szef@example.com')->firstOrFail();
         $this->assertTrue($admin->is_admin);
 
-        $this->actingAs($admin)->post('/admin/team', ['name' => 'Ania', 'email' => 'ania@example.com'])->assertRedirect();
+        $this->actingAs($admin)->withSession(['auth.password_confirmed_at' => time()])->post('/admin/team', ['name' => 'Ania', 'email' => 'ania@example.com'])->assertRedirect();
         \Illuminate\Support\Facades\Notification::assertSentTo(User::where('email', 'ania@example.com')->first(), \Illuminate\Auth\Notifications\ResetPassword::class);
     }
 
@@ -268,7 +268,7 @@ class AdPilotTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1, 'mail.mailers.smtp.timeout' => 2]);
 
-        $this->post('/admin/team', ['name' => 'Jan Test', 'email' => 'jan@example.com'])
+        $this->withSession(['auth.password_confirmed_at' => time()])->post('/admin/team', ['name' => 'Jan Test', 'email' => 'jan@example.com'])
             ->assertRedirect()
             ->assertSessionHas('error')
             ->assertSessionHas('invite_link', fn ($link) => str_contains($link, '/reset-password/'));
@@ -280,7 +280,7 @@ class AdPilotTest extends TestCase
         \Illuminate\Support\Facades\Notification::fake();
         $this->actingAs(User::factory()->create(['is_admin' => true]));
 
-        $this->post('/admin/team', ['name' => 'Ola Test', 'email' => 'ola@example.com'])->assertSessionHas('success');
+        $this->withSession(['auth.password_confirmed_at' => time()])->post('/admin/team', ['name' => 'Ola Test', 'email' => 'ola@example.com'])->assertSessionHas('success');
         $user = User::where('email', 'ola@example.com')->first();
         \Illuminate\Support\Facades\Notification::assertSentTo($user, \Illuminate\Auth\Notifications\ResetPassword::class);
         $this->post("/admin/team/{$user->id}/invite")->assertSessionHas('success');

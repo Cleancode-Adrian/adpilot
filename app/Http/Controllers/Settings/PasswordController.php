@@ -34,9 +34,16 @@ class PasswordController extends Controller
             'password' => ['required', Password::defaults(), 'confirmed'],
         ]);
 
-        $request->user()->update([
-            'password' => Hash::make($validated['password']),
-        ]);
+        $user = $request->user();
+        $user->update(['password' => Hash::make($validated['password'])]);
+
+        // po zmianie hasła inne zalogowane urządzenia tracą dostęp
+        \Illuminate\Support\Facades\Auth::logoutOtherDevices($validated['password']);
+        if (config('session.driver') === 'database') {
+            \Illuminate\Support\Facades\DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
+        }
+        \App\Models\SecurityEvent::record('password_changed', $user, $request);
+        \App\Services\Security\DeviceGuard::notify($user, 'Zmieniono hasło', ['Hasło do panelu zostało zmienione. Pozostałe urządzenia zostały wylogowane.', '**IP:** '.$request->ip()], 'Jeśli to nie Ty – użyj „Nie pamiętasz hasła?” na stronie logowania i skontaktuj się z administratorem.');
 
         return back();
     }

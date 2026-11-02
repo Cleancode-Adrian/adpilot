@@ -115,7 +115,7 @@ class ClientCareTest extends TestCase
         $this->actingAs($admin = $this->admin());
         $this->get("/clients/{$client->id}/credentials")->assertRedirect(route('password.confirm'));
 
-        $this->withSession(['auth.password_confirmed_at' => time()]);
+        $this->withSession(['auth.password_confirmed_at' => time(), 'vault.unlocked_until' => time() + 120]);
         $this->post("/clients/{$client->id}/credentials", [
             'category' => 'cms', 'label' => 'WP admin', 'url' => 'https://firma.pl/wp-admin', 'username' => 'admin',
             'secret' => 'Tajne!Haslo123', 'notes' => 'kody 2FA: 1111',
@@ -143,8 +143,8 @@ class ClientCareTest extends TestCase
         $this->assertSame('kody 2FA: 1111', $cred->notes);
         $this->assertSame('WP – admin', $cred->label);
 
-        // bez świeżego potwierdzenia hasła odczyt jest blokowany
-        $this->withSession(['auth.password_confirmed_at' => time() - 99999]);
+        // po wygaśnięciu odblokowania sejfu odczyt jest blokowany (423 = okno z hasłem)
+        $this->withSession(['vault.unlocked_until' => time() - 1]);
         $this->postJson("/credentials/{$cred->id}/reveal")->assertStatus(423);
 
         $this->delete("/credentials/{$cred->id}")->assertRedirect();
@@ -217,10 +217,6 @@ class ClientCareTest extends TestCase
         $this->assertSame('admin2', $cred->fresh()->username);
         $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.panel', null));
 
-        // odblokowanie sejfu wraca tylko na adres w panelu
-        $this->actingAs($admin)->withSession(['auth.password_confirmed_at' => time()]);
-        $this->get('/vault/unlock?back=/clients/'.$client->id)->assertRedirect('/clients/'.$client->id);
-        $this->get('/vault/unlock?back=//evil.com')->assertRedirect('/clients');
     }
 
     public function test_general_service_client(): void
