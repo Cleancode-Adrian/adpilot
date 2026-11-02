@@ -3,17 +3,21 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Activity, LayoutGrid, ListChecks, Palette, PlusCircle, ShieldCheck, UsersRound } from 'lucide-react';
+import { Activity, BarChart3, Building2, ListChecks, Palette, PlusCircle, ShieldCheck, UsersRound } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
     const { admin, care_due } = usePage<SharedData>().props;
 
-    const mainNavItems: NavItem[] = [
-        { title: 'Pulpit', url: '/dashboard', icon: LayoutGrid },
-        { title: 'Zadania reklamowe', url: '/tasks', icon: ListChecks },
-        { title: 'Opieka nad stronami', url: '/care', icon: ShieldCheck, badge: care_due },
+    // 1) Klienci – dane, logowanie, notatki, zadania  2) Reklamy – wyniki i zadania reklamowe
+    const clientItems: NavItem[] = [
+        { title: 'Wszyscy klienci', url: '/clients', icon: Building2 },
+        { title: 'Zadania i opieka', url: '/care', icon: ShieldCheck, badge: care_due },
         { title: 'Nowy klient', url: '/clients/create', icon: PlusCircle },
+    ];
+    const adsItems: NavItem[] = [
+        { title: 'Wyniki reklam', url: '/dashboard', icon: BarChart3 },
+        { title: 'Zadania reklamowe', url: '/tasks', icon: ListChecks },
     ];
 
     const adminItems: NavItem[] = admin
@@ -30,7 +34,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href="/dashboard" prefetch>
+                            <Link href="/clients" prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -39,7 +43,8 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} label="Praca" />
+                <NavMain items={clientItems} label="Klienci" />
+                <NavMain items={adsItems} label="Reklamy" />
                 {admin && <NavMain items={adminItems} label="Administracja" />}
             </SidebarContent>
 

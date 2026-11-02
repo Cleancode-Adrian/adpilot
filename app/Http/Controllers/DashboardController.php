@@ -16,7 +16,7 @@ class DashboardController extends Controller
         $from = $to->subDays(29);
 
         $showArchived = request()->boolean('archived');
-        $clients = Client::query()->when($showArchived, fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->active())->withCount(['recommendations as open_count' => fn ($q) => $q->open(),
+        $clients = Client::query()->runsAds()->when($showArchived, fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->active())->withCount(['recommendations as open_count' => fn ($q) => $q->open(),
             'recommendations as critical_count' => fn ($q) => $q->open()->where('severity', 'critical')])
             ->with('latestAudit', 'integrations:id,client_id,provider,status,last_synced_at,last_error')
             ->orderBy('name')->get()
@@ -42,7 +42,7 @@ class DashboardController extends Controller
             'tasks' => $tasks,
             'period' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
             'showArchived' => $showArchived,
-            'archivedCount' => Client::whereNotNull('archived_at')->count(),
+            'archivedCount' => Client::runsAds()->whereNotNull('archived_at')->count(),
         ]);
     }
 
@@ -57,7 +57,7 @@ class DashboardController extends Controller
                 ->when(request('client'), fn ($q, $c) => $q->where('client_id', $c))
                 ->whereHas('client', fn ($q) => $q->active())
                 ->bySeverity()->paginate(request('view', 'clients') === 'list' || request('client') ? 50 : 300)->withQueryString(),
-            'clients' => Client::active()->orderBy('name')->get(['id', 'name']),
+            'clients' => Client::active()->runsAds()->orderBy('name')->get(['id', 'name']),
             'filters' => request()->only(['status', 'severity', 'client', 'view']) + ['status' => $status],
         ]);
     }

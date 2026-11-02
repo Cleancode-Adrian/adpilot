@@ -98,7 +98,7 @@ class SystemStatus
     /** Integracje klientów: co połączone, co z błędem, co wygasa. */
     public function integrations(): array
     {
-        return Client::active()->with('integrations')->orderBy('name')->get()->map(function (Client $client) {
+        return Client::active()->runsAds()->with('integrations')->orderBy('name')->get()->map(function (Client $client) {
             $row = ['id' => $client->id, 'name' => $client->name, 'is_demo' => $client->is_demo, 'providers' => []];
             foreach (['google' => 'Google Ads / GA4', 'meta' => 'Meta Ads'] as $p => $label) {
                 $i = $client->integration($p);

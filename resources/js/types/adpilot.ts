@@ -14,6 +14,11 @@ export interface ClientProps {
     id: number;
     name: string;
     website_url: string;
+    has_ads: boolean;
+    has_care: boolean;
+    admin_url: string | null;
+    contact_name: string | null;
+    contact_phone: string | null;
     industry: string | null;
     goal: 'sales' | 'leads' | 'mixed';
     lead_events: string[] | null;

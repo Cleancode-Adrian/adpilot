@@ -82,20 +82,26 @@ export default function Tasks({
     }, [tasks.data]);
 
     return (
-        <AppLayout breadcrumbs={[{ title: 'Zadania', href: '/tasks' }]}>
-            <Head title="Zadania" />
+        <AppLayout breadcrumbs={[{ title: 'Zadania reklamowe', href: '/tasks' }]}>
+            <Head title="Zadania reklamowe" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-semibold">Zadania ze wszystkich kont</h1>
+                        <h1 className="text-xl font-semibold">Zadania reklamowe</h1>
                         <p className="text-muted-foreground text-sm">
-                            {tasks.total} pozycji{grouped && groups.length > 0 ? ` u ${groups.length} ${groups.length === 1 ? 'klienta' : 'klientów'}` : ''}
+                            {tasks.total} pozycji
+                            {grouped && groups.length > 0 ? ` u ${groups.length} ${groups.length === 1 ? 'klienta' : 'klientów'}` : ''}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {!filters.client && (
                             <div className="flex rounded-md border p-0.5">
-                                <Button variant={grouped ? 'secondary' : 'ghost'} size="sm" className="h-8" onClick={() => apply({ view: 'clients' })}>
+                                <Button
+                                    variant={grouped ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => apply({ view: 'clients' })}
+                                >
                                     <Layers className="size-4" /> Wg klienta
                                 </Button>
                                 <Button variant={!grouped ? 'secondary' : 'ghost'} size="sm" className="h-8" onClick={() => apply({ view: 'list' })}>

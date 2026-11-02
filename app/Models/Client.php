@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 class Client extends Model
 {
     protected $fillable = [
-        'name', 'website_url', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
+        'name', 'website_url', 'has_ads', 'has_care', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
         'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at',
     ];
 
@@ -19,6 +19,8 @@ class Client extends Model
     protected function casts(): array
     {
         return [
+            'has_ads' => 'boolean',
+            'has_care' => 'boolean',
             'target_roas' => 'float',
             'target_cpa' => 'float',
             'monthly_budget' => 'float',
@@ -86,6 +88,12 @@ class Client extends Model
     public function scopeActive($query)
     {
         return $query->whereNull('archived_at');
+    }
+
+    /** Klienci z usługą reklam (Google / Meta). */
+    public function scopeRunsAds($query)
+    {
+        return $query->where('has_ads', true);
     }
 
     public function integrations(): HasMany { return $this->hasMany(Integration::class); }

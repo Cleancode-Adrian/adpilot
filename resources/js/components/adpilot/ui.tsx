@@ -18,7 +18,11 @@ export function Flash() {
                 <div className="flex items-start gap-2 rounded-lg border border-green-600/30 bg-green-50 px-4 py-3 text-sm text-green-900 dark:bg-green-950/40 dark:text-green-100">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
                     <span className="flex-1">{visible.success}</span>
-                    <button onClick={() => setVisible((v) => ({ ...v, success: null }))} className="opacity-60 hover:opacity-100" aria-label="Zamknij">
+                    <button
+                        onClick={() => setVisible((v) => ({ ...v, success: null }))}
+                        className="opacity-60 hover:opacity-100"
+                        aria-label="Zamknij"
+                    >
                         ×
                     </button>
                 </div>
@@ -103,7 +107,19 @@ export function KpiTile({
     );
 }
 
-export function Section({ title, description, actions, children, className }: { title: string; description?: string; actions?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function Section({
+    title,
+    description,
+    actions,
+    children,
+    className,
+}: {
+    title: string;
+    description?: string;
+    actions?: React.ReactNode;
+    children: React.ReactNode;
+    className?: string;
+}) {
     return (
         <section className={cn('bg-card rounded-xl border', className)}>
             <div className="flex flex-wrap items-start justify-between gap-2 border-b px-4 py-3">

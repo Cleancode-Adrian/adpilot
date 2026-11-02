@@ -1,5 +1,5 @@
-import InputError from '@/components/input-error';
 import { Section } from '@/components/adpilot/ui';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,7 +39,9 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
             >
                 <div>
                     <h1 className="text-xl font-semibold">Ustawienia agencji</h1>
-                    <p className="text-muted-foreground text-sm">Nazwa, logo i dane kontaktowe – widoczne w panelu, raportach dla klientów i e-mailach.</p>
+                    <p className="text-muted-foreground text-sm">
+                        Nazwa, logo i dane kontaktowe – widoczne w panelu, raportach dla klientów i e-mailach.
+                    </p>
                 </div>
 
                 <Section title="Dane agencji">
@@ -57,16 +59,28 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
                             {brand.logo_url && !form.data.remove_logo ? (
                                 <img src={brand.logo_url} alt="Logo" className="h-12 max-w-48 rounded border object-contain p-1" />
                             ) : (
-                                <div className="text-muted-foreground flex h-12 w-32 items-center justify-center rounded border border-dashed text-xs">brak logo</div>
+                                <div className="text-muted-foreground flex h-12 w-32 items-center justify-center rounded border border-dashed text-xs">
+                                    brak logo
+                                </div>
                             )}
                             <div className="grid gap-1.5">
                                 <Label htmlFor="logo">Logo (PNG/JPG/WebP, maks. 2 MB)</Label>
-                                <Input id="logo" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => form.setData('logo', e.target.files?.[0] ?? null)} />
+                                <Input
+                                    id="logo"
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    onChange={(e) => form.setData('logo', e.target.files?.[0] ?? null)}
+                                />
                                 <InputError message={form.errors.logo} />
                             </div>
                             {brand.logo_url && (
                                 <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={form.data.remove_logo} onChange={(e) => form.setData('remove_logo', e.target.checked)} /> Usuń logo
+                                    <input
+                                        type="checkbox"
+                                        checked={form.data.remove_logo}
+                                        onChange={(e) => form.setData('remove_logo', e.target.checked)}
+                                    />{' '}
+                                    Usuń logo
                                 </label>
                             )}
                         </div>

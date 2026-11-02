@@ -96,7 +96,9 @@ export default function Reports({
                                         <div className="text-muted-foreground text-xs">utworzono {dateTime(r.created_at)}</div>
                                     </td>
                                     <td className="py-2">{r.type === 'client' ? 'Dla klienta' : 'Plan działań'}</td>
-                                    <td className="text-muted-foreground py-2 text-xs">{r.ai_model === 'szablon' ? 'szablon' : r.ai_model ? `AI (${r.ai_model})` : '–'}</td>
+                                    <td className="text-muted-foreground py-2 text-xs">
+                                        {r.ai_model === 'szablon' ? 'szablon' : r.ai_model ? `AI (${r.ai_model})` : '–'}
+                                    </td>
                                     <td className="py-2 text-xs">{r.sent_at ? dateTime(r.sent_at) : '–'}</td>
                                     <td className="py-2 text-right">
                                         {r.type === 'client' && (

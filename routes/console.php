@@ -48,7 +48,7 @@ Artisan::command('adpilot:sync {client?}', function (?int $client = null) {
 Artisan::command('adpilot:monthly-reports', function () {
     $from = now()->subMonthNoOverflow()->startOfMonth()->toDateString();
     $to = now()->subMonthNoOverflow()->endOfMonth()->toDateString();
-    foreach (Client::active()->where('is_demo', false)->get() as $c) {
+    foreach (Client::active()->runsAds()->where('is_demo', false)->get() as $c) {
         GenerateReportJob::dispatch($c, 'client', $from, $to, $c->auto_send_reports);
     }
     $this->info("Zlecono raporty za $from – $to.");
@@ -129,11 +129,11 @@ Artisan::command('adpilot:backup {--keep=14}', function () {
 Schedule::call(fn () => SystemStatus::beat(SystemStatus::HEARTBEAT_KEY))->everyMinute()->name('adpilot-heartbeat')->evenInMaintenanceMode();
 Schedule::job(new HeartbeatJob)->everyFiveMinutes()->name('adpilot-worker-heartbeat');
 
-Schedule::call(fn () => Client::active()->get()->each(fn ($c) => SyncClientJob::dispatch($c)))
+Schedule::call(fn () => Client::active()->runsAds()->get()->each(fn ($c) => SyncClientJob::dispatch($c)))
     ->dailyAt('05:30')->name('adpilot-daily-sync');
 
 Schedule::call(function () {
-    Client::active()->where('is_demo', false)->get()
+    Client::active()->runsAds()->where('is_demo', false)->get()
         ->each(fn ($c) => RunTrackingAuditJob::dispatch($c->audits()->create(['url' => $c->website_url])));
 })->weeklyOn(1, '04:00')->name('adpilot-weekly-audit');
 

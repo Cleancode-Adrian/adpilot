@@ -32,7 +32,15 @@ function Score({ score }: { score: number }) {
     );
 }
 
-export default function AuditPage({ client, audit, history }: { client: ClientProps; audit: Audit | null; history: Pick<Audit, 'id' | 'status' | 'score' | 'created_at'>[] }) {
+export default function AuditPage({
+    client,
+    audit,
+    history,
+}: {
+    client: ClientProps;
+    audit: Audit | null;
+    history: Pick<Audit, 'id' | 'status' | 'score' | 'created_at'>[];
+}) {
     const running = audit && (audit.status === 'pending' || audit.status === 'running');
 
     // odświeżaj, dopóki audyt trwa
@@ -52,7 +60,8 @@ export default function AuditPage({ client, audit, history }: { client: ClientPr
                 description="Skanuje stronę i publiczne kontenery GTM: GA4, Google Ads, Meta Pixel, Consent Mode v2, technika i szybkość."
                 actions={
                     <Button size="sm" disabled={!!running} onClick={() => router.post(`/clients/${client.id}/audit`, {}, { preserveScroll: true })}>
-                        {running ? <Loader2 className="size-4 animate-spin" /> : <ScanSearch className="size-4" />} {running ? 'Trwa audyt…' : 'Uruchom audyt'}
+                        {running ? <Loader2 className="size-4 animate-spin" /> : <ScanSearch className="size-4" />}{' '}
+                        {running ? 'Trwa audyt…' : 'Uruchom audyt'}
                     </Button>
                 }
             >

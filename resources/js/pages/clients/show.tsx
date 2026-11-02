@@ -55,7 +55,19 @@ function AdVerdict({ ad, campaign, leads = false }: { ad: Stat; campaign?: Stat;
     return <span className="text-muted-foreground text-xs">w normie</span>;
 }
 
-function StatTable({ rows, currency, kind, campaigns, leads = false }: { rows: Stat[]; currency: string; kind: 'campaign' | 'ad'; campaigns?: Map<number, Stat>; leads?: boolean }) {
+function StatTable({
+    rows,
+    currency,
+    kind,
+    campaigns,
+    leads = false,
+}: {
+    rows: Stat[];
+    currency: string;
+    kind: 'campaign' | 'ad';
+    campaigns?: Map<number, Stat>;
+    leads?: boolean;
+}) {
     const [sort, setSort] = useState<keyof Stat>('cost');
     const sorted = useMemo(() => [...rows].sort((a, b) => (Number(b[sort]) || 0) - (Number(a[sort]) || 0)), [rows, sort]);
     const th = (key: keyof Stat, label: string) => (
@@ -142,7 +154,11 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
         <ClientLayout client={client} title="Przegląd">
             {/* Filtry w jednym rzędzie nad wykresami */}
             <div className="flex flex-wrap items-center gap-2">
-                <NativeSelect value={days} onChange={(e) => router.get(`/clients/${client.id}`, { days: e.target.value }, { preserveScroll: true })} aria-label="Okres">
+                <NativeSelect
+                    value={days}
+                    onChange={(e) => router.get(`/clients/${client.id}/ads`, { days: e.target.value }, { preserveScroll: true })}
+                    aria-label="Okres"
+                >
                     {[7, 14, 30, 60, 90].map((d) => (
                         <option key={d} value={d}>
                             Ostatnie {d} dni
@@ -155,7 +171,8 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                     <option value="meta_ads">Meta Ads</option>
                 </NativeSelect>
                 <span className="text-muted-foreground text-xs">
-                    {new Date(kpis.period.from).toLocaleDateString('pl-PL')} – {new Date(kpis.period.to).toLocaleDateString('pl-PL')}, porównanie z poprzednimi {days} dniami
+                    {new Date(kpis.period.from).toLocaleDateString('pl-PL')} – {new Date(kpis.period.to).toLocaleDateString('pl-PL')}, porównanie z
+                    poprzednimi {days} dniami
                 </span>
             </div>
 
@@ -172,11 +189,30 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                     {isLeads ? (
                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                             <KpiTile label="Wydatki" value={money(a.cost.value, cur)} delta={a.cost.delta} inverse />
-                            <KpiTile label="Leady z reklam" value={num(a.conversions.value, 0)} delta={a.conversions.delta} hint="Formularze, rejestracje, telefony zliczone przez Google Ads i Meta" />
+                            <KpiTile
+                                label="Leady z reklam"
+                                value={num(a.conversions.value, 0)}
+                                delta={a.conversions.delta}
+                                hint="Formularze, rejestracje, telefony zliczone przez Google Ads i Meta"
+                            />
                             <KpiTile label="Koszt leada (CPL)" value={money(a.cpa.value, cur, 2)} delta={a.cpa.delta} inverse />
-                            <KpiTile label="Konwersja kliknięć" value={pct(a.clicks.value ? ((a.conversions.value ?? 0) / a.clicks.value) * 100 : 0, 2)} hint="Leady / kliknięcia" />
-                            <KpiTile label="Wejścia na stronę" value={num(an.sessions.value)} delta={an.sessions.delta} hint="Sesje GA4 ze wszystkich źródeł" />
-                            <KpiTile label="Formularze i rejestracje (GA4)" value={num(an.leads.value)} delta={an.leads.delta} hint={client.lead_event_names.join(', ')} />
+                            <KpiTile
+                                label="Konwersja kliknięć"
+                                value={pct(a.clicks.value ? ((a.conversions.value ?? 0) / a.clicks.value) * 100 : 0, 2)}
+                                hint="Leady / kliknięcia"
+                            />
+                            <KpiTile
+                                label="Wejścia na stronę"
+                                value={num(an.sessions.value)}
+                                delta={an.sessions.delta}
+                                hint="Sesje GA4 ze wszystkich źródeł"
+                            />
+                            <KpiTile
+                                label="Formularze i rejestracje (GA4)"
+                                value={num(an.leads.value)}
+                                delta={an.leads.delta}
+                                hint={client.lead_event_names.join(', ')}
+                            />
                             <KpiTile label="Kliknięcia" value={num(a.clicks.value)} delta={a.clicks.delta} />
                             <KpiTile label="CPC" value={money(a.cpc.value, cur, 2)} delta={a.cpc.delta} inverse />
                         </div>
@@ -186,7 +222,11 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                             <KpiTile label="Przychód z reklam" value={money(a.conversion_value.value, cur)} delta={a.conversion_value.delta} />
                             <KpiTile label="ROAS" value={roas(a.roas.value)} delta={a.roas.delta} hint="Przychód z reklam / koszt" />
                             <KpiTile label="Koszt konwersji (CPA)" value={money(a.cpa.value, cur, 2)} delta={a.cpa.delta} inverse />
-                            <KpiTile label={kpis.goal === 'mixed' ? 'Konwersje (zakupy + leady)' : 'Konwersje'} value={num(a.conversions.value, 1)} delta={a.conversions.delta} />
+                            <KpiTile
+                                label={kpis.goal === 'mixed' ? 'Konwersje (zakupy + leady)' : 'Konwersje'}
+                                value={num(a.conversions.value, 1)}
+                                delta={a.conversions.delta}
+                            />
                             <KpiTile label="Kliknięcia" value={num(a.clicks.value)} delta={a.clicks.delta} />
                             <KpiTile label="CTR" value={pct(a.ctr.value, 2)} delta={a.ctr.delta} />
                             <KpiTile label="CPC" value={money(a.cpc.value, cur, 2)} delta={a.cpc.delta} inverse />
@@ -210,11 +250,26 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                     <DailyTable data={daily} currency={cur} />
 
                     <Section title="Kampanie" description="Kliknij nagłówek kolumny, aby posortować">
-                        {filt(campaigns).length ? <StatTable rows={filt(campaigns)} currency={cur} kind="campaign" leads={isLeads} /> : <EmptyState title="Brak kampanii w tym okresie" />}
+                        {filt(campaigns).length ? (
+                            <StatTable rows={filt(campaigns)} currency={cur} kind="campaign" leads={isLeads} />
+                        ) : (
+                            <EmptyState title="Brak kampanii w tym okresie" />
+                        )}
                     </Section>
 
-                    <Section title="Reklamy – co działa, a co nie" description={isLeads ? 'Ocena względem średniego kosztu leada w kampanii, w której działa reklama' : 'Ocena względem średniego ROAS kampanii, w której działa reklama'}>
-                        {filt(ads).length ? <StatTable rows={filt(ads)} currency={cur} kind="ad" campaigns={campaignMap} leads={isLeads} /> : <EmptyState title="Brak danych o reklamach" />}
+                    <Section
+                        title="Reklamy – co działa, a co nie"
+                        description={
+                            isLeads
+                                ? 'Ocena względem średniego kosztu leada w kampanii, w której działa reklama'
+                                : 'Ocena względem średniego ROAS kampanii, w której działa reklama'
+                        }
+                    >
+                        {filt(ads).length ? (
+                            <StatTable rows={filt(ads)} currency={cur} kind="ad" campaigns={campaignMap} leads={isLeads} />
+                        ) : (
+                            <EmptyState title="Brak danych o reklamach" />
+                        )}
                     </Section>
 
                     <div className="grid gap-4 xl:grid-cols-2">
@@ -227,7 +282,12 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                                         {kpis.goal !== 'sales' && (
                                             <>
                                                 <KpiTile label="Kontakty (GA4)" value={num(an.leads.value)} delta={an.leads.delta} />
-                                                <KpiTile label="Konwersja strony" value={pct(an.lead_cvr.value, 2)} delta={an.lead_cvr.delta} hint="Kontakty / sesje" />
+                                                <KpiTile
+                                                    label="Konwersja strony"
+                                                    value={pct(an.lead_cvr.value, 2)}
+                                                    delta={an.lead_cvr.delta}
+                                                    hint="Kontakty / sesje"
+                                                />
                                             </>
                                         )}
                                         {kpis.goal !== 'leads' && (
@@ -257,7 +317,9 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                                                 <th className="py-2 text-right font-medium">Zaang.</th>
                                                 {isLeads ? (
                                                     <>
-                                                        <th className="py-2 text-right font-medium" title="Zdarzenia kluczowe GA4">Konwersje</th>
+                                                        <th className="py-2 text-right font-medium" title="Zdarzenia kluczowe GA4">
+                                                            Konwersje
+                                                        </th>
                                                         <th className="py-2 text-right font-medium">Konw. %</th>
                                                     </>
                                                 ) : (
@@ -271,7 +333,7 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                                         </thead>
                                         <tbody>
                                             {channels.map((c) => (
-                                                <tr key={c.channel} className="border-b last:border-0 tabular-nums">
+                                                <tr key={c.channel} className="border-b tabular-nums last:border-0">
                                                     <td className="py-1.5">{c.channel}</td>
                                                     <td className="py-1.5 text-right">{num(c.sessions)}</td>
                                                     <td className="py-1.5 text-right">{pct(c.engagement_rate)}</td>
@@ -297,7 +359,10 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                             )}
                         </Section>
 
-                        <Section title="Wyszukiwane hasła (Google Ads, 30 dni)" description="Najdroższe hasła – zielone przynoszą sprzedaż, bez konwersji to kandydaci na wykluczenia">
+                        <Section
+                            title="Wyszukiwane hasła (Google Ads, 30 dni)"
+                            description="Najdroższe hasła – zielone przynoszą sprzedaż, bez konwersji to kandydaci na wykluczenia"
+                        >
                             {searchTerms.length ? (
                                 <div className="max-h-[28rem] overflow-auto">
                                     <table className="w-full text-sm">
@@ -311,7 +376,7 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                                         </thead>
                                         <tbody>
                                             {searchTerms.map((t) => (
-                                                <tr key={t.id} className="border-b last:border-0 tabular-nums">
+                                                <tr key={t.id} className="border-b tabular-nums last:border-0">
                                                     <td className="py-1.5">
                                                         <div className="font-mono text-xs">{t.term}</div>
                                                         <div className="text-muted-foreground text-xs">{t.campaign?.name}</div>

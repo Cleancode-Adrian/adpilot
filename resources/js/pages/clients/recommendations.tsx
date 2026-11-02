@@ -38,7 +38,11 @@ export default function Recommendations({
     const generatePlan = () => {
         const to = new Date(Date.now() - 864e5);
         const from = new Date(to.getTime() - 13 * 864e5);
-        router.post(`/clients/${client.id}/reports`, { type: 'internal', from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }, { preserveScroll: true });
+        router.post(
+            `/clients/${client.id}/reports`,
+            { type: 'internal', from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) },
+            { preserveScroll: true },
+        );
     };
 
     return (
@@ -65,7 +69,10 @@ export default function Recommendations({
                             key={t.key}
                             href={`/clients/${client.id}/recommendations?status=${t.key}`}
                             preserveScroll
-                            className={cn('rounded-full border px-3 py-1 text-sm', status === t.key ? 'bg-foreground text-background' : 'hover:bg-muted')}
+                            className={cn(
+                                'rounded-full border px-3 py-1 text-sm',
+                                status === t.key ? 'bg-foreground text-background' : 'hover:bg-muted',
+                            )}
                         >
                             {t.label} ({counts[t.key] ?? 0})
                         </Link>

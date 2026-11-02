@@ -33,10 +33,15 @@ function Legend({ items }: { items: { label: string; color: string; dashed?: boo
 
 function ChartTooltip({ active, payload, label, currency, names }: TipProps) {
     if (!active || !payload?.length) return null;
-    const total = payload.length > 1 && payload.every((p) => String(p.dataKey).endsWith('_cost')) ? payload.reduce((s, p) => s + (Number(p.value) || 0), 0) : null;
+    const total =
+        payload.length > 1 && payload.every((p) => String(p.dataKey).endsWith('_cost'))
+            ? payload.reduce((s, p) => s + (Number(p.value) || 0), 0)
+            : null;
     return (
         <div className="bg-popover text-popover-foreground rounded-md border px-3 py-2 text-xs shadow-md">
-            <div className="mb-1 font-medium">{new Date(String(label)).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long' })}</div>
+            <div className="mb-1 font-medium">
+                {new Date(String(label)).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long' })}
+            </div>
             {payload.map((p) => (
                 <div key={String(p.dataKey)} className="flex items-center justify-between gap-4">
                     <span className="inline-flex items-center gap-1.5">
@@ -76,8 +81,26 @@ export function SpendChart({ data, currency }: { data: DailyRow[]; currency: str
                         <XAxis dataKey="date" tickFormatter={shortDate} {...axisProps} minTickGap={24} />
                         <YAxis {...axisProps} axisLine={false} width={56} tickFormatter={(v) => money(v, currency)} />
                         <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.5 }} content={<ChartTooltip currency={currency} names={names} />} />
-                        {hasGoogle && <Bar dataKey="google_cost" stackId="s" fill="var(--series-google)" stroke="var(--card)" strokeWidth={1} radius={hasMeta ? 0 : [4, 4, 0, 0]} />}
-                        {hasMeta && <Bar dataKey="meta_cost" stackId="s" fill="var(--series-meta)" stroke="var(--card)" strokeWidth={1} radius={[4, 4, 0, 0]} />}
+                        {hasGoogle && (
+                            <Bar
+                                dataKey="google_cost"
+                                stackId="s"
+                                fill="var(--series-google)"
+                                stroke="var(--card)"
+                                strokeWidth={1}
+                                radius={hasMeta ? 0 : [4, 4, 0, 0]}
+                            />
+                        )}
+                        {hasMeta && (
+                            <Bar
+                                dataKey="meta_cost"
+                                stackId="s"
+                                fill="var(--series-meta)"
+                                stroke="var(--card)"
+                                strokeWidth={1}
+                                radius={[4, 4, 0, 0]}
+                            />
+                        )}
                     </BarChart>
                 </ResponsiveContainer>
             </div>
@@ -102,9 +125,27 @@ export function RevenueChart({ data, currency, hasAnalytics }: { data: DailyRow[
                         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                         <XAxis dataKey="date" tickFormatter={shortDate} {...axisProps} minTickGap={24} />
                         <YAxis {...axisProps} axisLine={false} width={64} tickFormatter={(v) => money(v, currency)} />
-                        <Tooltip cursor={{ stroke: 'var(--chart-axis)', strokeWidth: 1 }} content={<ChartTooltip currency={currency} names={names} />} />
-                        {hasAnalytics && <Line dataKey="revenue" stroke="var(--chart-axis)" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={{ r: 4 }} />}
-                        <Line dataKey="ads_value" stroke="var(--series-revenue)" strokeWidth={2} dot={false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} />
+                        <Tooltip
+                            cursor={{ stroke: 'var(--chart-axis)', strokeWidth: 1 }}
+                            content={<ChartTooltip currency={currency} names={names} />}
+                        />
+                        {hasAnalytics && (
+                            <Line
+                                dataKey="revenue"
+                                stroke="var(--chart-axis)"
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                dot={false}
+                                activeDot={{ r: 4 }}
+                            />
+                        )}
+                        <Line
+                            dataKey="ads_value"
+                            stroke="var(--series-revenue)"
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }}
+                        />
                     </LineChart>
                 </ResponsiveContainer>
             </div>
@@ -174,7 +215,9 @@ export function LeadsChart({ data, hasAnalytics }: { data: DailyRow[]; hasAnalyt
                             content={({ active, payload, label }) =>
                                 active && payload?.length ? (
                                     <div className="bg-popover text-popover-foreground rounded-md border px-3 py-2 text-xs shadow-md">
-                                        <div className="mb-1 font-medium">{new Date(String(label)).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long' })}</div>
+                                        <div className="mb-1 font-medium">
+                                            {new Date(String(label)).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'long' })}
+                                        </div>
                                         {payload.map((p) => (
                                             <div key={String(p.dataKey)} className="flex justify-between gap-4">
                                                 <span>{names[String(p.dataKey)]}</span>
@@ -185,8 +228,16 @@ export function LeadsChart({ data, hasAnalytics }: { data: DailyRow[]; hasAnalyt
                                 ) : null
                             }
                         />
-                        {hasAnalytics && <Line dataKey="leads" stroke="var(--chart-axis)" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={{ r: 4 }} />}
-                        <Line dataKey="ads_conversions" stroke="var(--series-revenue)" strokeWidth={2} dot={false} activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }} />
+                        {hasAnalytics && (
+                            <Line dataKey="leads" stroke="var(--chart-axis)" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={{ r: 4 }} />
+                        )}
+                        <Line
+                            dataKey="ads_conversions"
+                            stroke="var(--series-revenue)"
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4, stroke: 'var(--card)', strokeWidth: 2 }}
+                        />
                     </LineChart>
                 </ResponsiveContainer>
             </div>

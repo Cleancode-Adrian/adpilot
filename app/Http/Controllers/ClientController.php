@@ -13,9 +13,29 @@ use Inertia\Inertia;
 
 class ClientController extends Controller
 {
-    public function index()
+    /** Lista klientów – punkt wyjścia: dane, logowanie do strony, opieka, reklamy. */
+    public function index(Request $request)
     {
-        return redirect()->route('dashboard');
+        $archived = $request->boolean('archived');
+        $planner = app(\App\Services\Care\CarePlanner::class);
+
+        $clients = Client::query()
+            ->when($archived, fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->active())
+            ->withCount(['credentials', 'recommendations as open_count' => fn ($q) => $q->open()])
+            ->orderBy('is_demo')->orderBy('name')->get()
+            ->map(fn (Client $c) => [
+                ...$c->only(['id', 'name', 'website_url', 'admin_url', 'industry', 'has_ads', 'has_care', 'contact_name', 'contact_email', 'contact_phone', 'is_demo', 'archived_at']),
+                'notes_excerpt' => $c->notes ? \Illuminate\Support\Str::limit($c->notes, 140) : null,
+                'credentials_count' => $c->credentials_count,
+                'open_count' => $c->has_ads ? $c->open_count : 0,
+                'care' => $c->has_care ? $planner->summary($c) : null,
+            ]);
+
+        return Inertia::render('clients/index', [
+            'clients' => $clients,
+            'showArchived' => $archived,
+            'archivedCount' => Client::whereNotNull('archived_at')->count(),
+        ]);
     }
 
     public function create()
@@ -26,10 +46,18 @@ class ClientController extends Controller
     public function store(Request $request)
     {
         $client = Client::create($this->validated($request));
-        // od razu audyt strony – działa bez dostępu do kont reklamowych
-        app(AuditController::class)->store($client);
 
-        return redirect()->route('clients.integrations', $client)->with('success', 'Klient dodany. Audyt strony został uruchomiony – teraz podłącz konta reklamowe.');
+        if ($client->has_ads) {
+            // od razu audyt strony – działa bez dostępu do kont reklamowych
+            app(AuditController::class)->store($client);
+
+            return redirect()->route('clients.integrations', $client)->with('success', 'Klient dodany. Audyt strony został uruchomiony – teraz podłącz konta reklamowe.');
+        }
+        if ($client->has_care) {
+            return redirect()->route('clients.care', $client)->with('success', 'Klient dodany. Wybierz pakiet opieki albo dodaj własne zadania.');
+        }
+
+        return redirect()->route('clients.show', $client)->with('success', 'Klient dodany.');
     }
 
     public function edit(Client $client)
@@ -48,11 +76,35 @@ class ClientController extends Controller
     {
         $client->delete();
 
-        return redirect()->route('dashboard')->with('success', 'Klient usunięty.');
+        return redirect()->route('clients.index')->with('success', 'Klient usunięty.');
     }
 
-    /** Przegląd: KPI, wykres, kampanie, reklamy. */
-    public function show(Request $request, Client $client)
+    /** Karta klienta: dane, kontakt, logowanie do strony, notatki, skrót opieki i reklam. */
+    public function show(Client $client)
+    {
+        $period = \App\Services\Care\CarePlanner::period();
+        if ($client->has_care) {
+            app(\App\Services\Care\CarePlanner::class)->ensureMonth($client);
+        }
+
+        return Inertia::render('clients/card', [
+            'client' => $this->clientProps($client),
+            'upcoming' => $client->careTasks()->todo()->where('period', '<=', $period)->orderBy('due_date')->limit(8)
+                ->get(['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note']),
+            'adsKpis' => $client->has_ads ? (new Metrics($client))->kpis(CarbonImmutable::yesterday()->subDays(29), CarbonImmutable::yesterday()) : null,
+        ]);
+    }
+
+    /** Notatki z karty klienta (zapis w locie). */
+    public function updateNotes(Request $request, Client $client)
+    {
+        $client->update($request->validate(['notes' => 'nullable|string|max:20000']));
+
+        return back();
+    }
+
+    /** Wyniki reklam: KPI, wykres, kampanie, reklamy. */
+    public function ads(Request $request, Client $client)
     {
         [$from, $to, $days] = $this->period($request);
         $m = new Metrics($client);
@@ -87,7 +139,7 @@ class ClientController extends Controller
         $archived = ! $client->archived_at;
         $client->update(['archived_at' => $archived ? now() : null]);
 
-        return redirect()->route($archived ? 'dashboard' : 'clients.show', $archived ? [] : $client)
+        return redirect()->route($archived ? 'clients.index' : 'clients.show', $archived ? [] : $client)
             ->with('success', $archived ? "Klient „{$client->name}” zarchiwizowany – nie jest synchronizowany, dane i raporty zostają." : 'Klient przywrócony.');
     }
 
@@ -103,7 +155,7 @@ class ClientController extends Controller
         $client->load('integrations');
 
         return [
-            ...$client->only(['id', 'name', 'website_url', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
+            ...$client->only(['id', 'name', 'website_url', 'has_ads', 'has_care', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
             'open_count' => $client->recommendations()->open()->count(),
             'integrations' => $client->integrations->map->only(['id', 'provider', 'status', 'settings', 'last_synced_at', 'last_error']),
             'lead_event_names' => $client->leadEventNames(),
@@ -127,24 +179,32 @@ class ClientController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:150',
             'website_url' => 'required|string|max:255',
+            'has_ads' => 'boolean',
+            'has_care' => 'boolean',
+            'admin_url' => 'nullable|string|max:500',
+            'contact_name' => 'nullable|string|max:150',
+            'contact_phone' => 'nullable|string|max:50',
             'industry' => 'nullable|string|max:150',
             'goal' => 'nullable|in:sales,leads,mixed',
             'lead_events' => 'nullable|string|max:500',
-            'currency' => 'required|string|size:3',
+            'currency' => 'nullable|string|size:3',
             'target_roas' => 'nullable|numeric|min:0|max:100',
             'target_cpa' => 'nullable|numeric|min:0',
             'monthly_budget' => 'nullable|numeric|min:0',
             'daily_budget' => 'nullable|numeric|min:0',
             'contact_email' => 'nullable|email',
             'auto_send_reports' => 'boolean',
-            'notes' => 'nullable|string|max:5000',
+            'notes' => 'nullable|string|max:20000',
         ]);
         $url = Client::normalizeUrl($data['website_url']);
         if (! $url) {
             throw \Illuminate\Validation\ValidationException::withMessages(['website_url' => 'Nieprawidłowy adres strony – wpisz np. projekciarz.pl lub https://projekciarz.pl']);
         }
         $data['website_url'] = $url;
-        $data['currency'] = strtoupper($data['currency']);
+        $data['currency'] = strtoupper($data['currency'] ?? 'PLN');
+        if (filled($data['admin_url'] ?? null) && ! preg_match('#^https?://#i', $data['admin_url'])) {
+            $data['admin_url'] = 'https://'.ltrim($data['admin_url'], '/');
+        }
         $data['goal'] ??= 'sales';
         $events = array_values(array_filter(array_map('trim', preg_split('/[,\s]+/', (string) ($data['lead_events'] ?? '')))));
         $data['lead_events'] = $events ?: null;

@@ -151,4 +151,35 @@ class ClientCareTest extends TestCase
         $this->assertSame(0, ClientCredential::count());
         $this->assertSame(1, CredentialLog::where('action', 'delete')->count());
     }
+
+    public function test_care_only_client_flow_without_ads(): void
+    {
+        $this->actingAs($this->admin());
+
+        $this->post('/clients', [
+            'name' => 'Medoncr', 'website_url' => 'medoncr.com', 'admin_url' => 'medoncr.com/wp-admin',
+            'contact_name' => 'Jan Kowalski', 'contact_phone' => '600 100 200', 'has_care' => true, 'has_ads' => false,
+        ])->assertRedirect();
+        $client = Client::where('name', 'Medoncr')->first();
+        $this->assertTrue($client->has_care);
+        $this->assertFalse($client->has_ads);
+        $this->assertSame('https://medoncr.com/wp-admin', $client->admin_url);
+        $this->assertSame('PLN', $client->currency);
+        $this->assertSame(0, $client->audits()->count()); // bez reklam – bez audytu pomiaru
+
+        // nie ma go w wynikach reklam, jest na liście klientów
+        $this->get('/dashboard')->assertInertia(fn ($p) => $p->has('clients', 0));
+        $this->get('/clients')->assertOk()->assertInertia(fn ($p) => $p->component('clients/index')->where('clients.0.name', 'Medoncr'));
+
+        // karta: zadanie jednorazowe + notatki
+        $this->post("/clients/{$client->id}/care/tasks", ['title' => 'Wymienić baner', 'due_date' => now()->toDateString()]);
+        $this->patch("/clients/{$client->id}/notes", ['notes' => "Abonament 300 zł\nHosting: cyber_Folks"])->assertRedirect();
+        $this->get("/clients/{$client->id}")->assertOk()->assertInertia(fn ($p) => $p->component('clients/card')
+            ->where('client.notes', "Abonament 300 zł\nHosting: cyber_Folks")
+            ->where('client.admin_url', 'https://medoncr.com/wp-admin')
+            ->has('upcoming', 1)
+            ->where('adsKpis', null));
+
+        $this->get('/')->assertRedirect('/clients');
+    }
 }

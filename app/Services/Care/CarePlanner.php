@@ -110,6 +110,7 @@ class CarePlanner
             ]);
             $added++;
         }
+        $client->has_care || $client->update(['has_care' => true]);
         $this->ensureMonth($client);
 
         return $added;

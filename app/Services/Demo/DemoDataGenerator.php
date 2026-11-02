@@ -19,6 +19,7 @@ class DemoDataGenerator
     public static function createClient(): Client
     {
         $client = Client::create([
+            'has_ads' => true,
             'name' => 'DEMO – Ogrodowy Raj (meble ogrodowe)',
             'website_url' => 'https://demo-ogrodowyraj.pl',
             'industry' => 'E-commerce – dom i ogród',
@@ -44,6 +45,7 @@ class DemoDataGenerator
     public static function createLeadsClient(): Client
     {
         $client = Client::create([
+            'has_ads' => true,
             'name' => 'DEMO – Biuro rachunkowe Bilans (kontakty)',
             'website_url' => 'https://demo-biurobilans.pl',
             'industry' => 'Usługi księgowe B2B',

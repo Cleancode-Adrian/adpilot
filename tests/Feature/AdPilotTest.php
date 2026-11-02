@@ -58,7 +58,7 @@ class AdPilotTest extends TestCase
 
         foreach ([
             '/admin/status', '/admin/settings', '/admin/team', '/dashboard?archived=1',
-            '/dashboard', '/tasks', '/clients/create', "/clients/{$client->id}", "/clients/{$client->id}?days=7",
+            '/dashboard', '/tasks', '/clients', '/clients?archived=1', '/care', '/clients/create', "/clients/{$client->id}", "/clients/{$client->id}/ads", "/clients/{$client->id}/ads?days=7", "/clients/{$client->id}/care",
             "/clients/{$client->id}/edit", "/clients/{$client->id}/recommendations", "/clients/{$client->id}/recommendations?status=done",
             "/clients/{$client->id}/audit", "/clients/{$client->id}/integrations", "/clients/{$client->id}/reports", "/reports/{$report->id}",
         ] as $url) {
@@ -81,7 +81,7 @@ class AdPilotTest extends TestCase
         Http::fake();
         $this->actingAs(User::factory()->create());
 
-        $this->post('/clients', ['name' => 'Sklep Test', 'website_url' => 'sklep-test.pl', 'currency' => 'pln'])
+        $this->post('/clients', ['name' => 'Sklep Test', 'website_url' => 'sklep-test.pl', 'currency' => 'pln', 'has_ads' => true])
             ->assertRedirect();
         $client = Client::where('name', 'Sklep Test')->firstOrFail();
         $this->assertSame('https://sklep-test.pl', $client->website_url);
@@ -125,7 +125,7 @@ class AdPilotTest extends TestCase
         app(RuleEngine::class)->run($client);
         $this->actingAs(User::factory()->create(['is_admin' => true]));
 
-        $this->get("/clients/{$client->id}")->assertOk()
+        $this->get("/clients/{$client->id}/ads")->assertOk()
             ->assertInertia(fn ($page) => $page->where('kpis.goal', 'leads')->where('kpis.analytics.leads.value', fn ($v) => $v > 0));
 
         $report = app(ReportBuilder::class)->build($client, 'client', CarbonImmutable::yesterday()->subDays(29), CarbonImmutable::yesterday());
@@ -150,7 +150,7 @@ class AdPilotTest extends TestCase
         $client = $this->demo();
         $this->actingAs(User::factory()->create());
 
-        $this->post("/clients/{$client->id}/archive")->assertRedirect('/dashboard');
+        $this->post("/clients/{$client->id}/archive")->assertRedirect('/clients');
         $this->assertNotNull($client->fresh()->archived_at);
         $this->get('/dashboard')->assertInertia(fn ($page) => $page->has('clients', 0)->where('archivedCount', 1));
 

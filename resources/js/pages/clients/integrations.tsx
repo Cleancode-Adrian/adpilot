@@ -27,7 +27,19 @@ function Status({ integration }: { integration?: Integration }) {
     return <span className="text-sm text-amber-700 dark:text-amber-400">Wybierz konto</span>;
 }
 
-function AccountPicker({ label, accounts, value, onChange, placeholder }: { label: string; accounts: Account[]; value: string; onChange: (v: string) => void; placeholder: string }) {
+function AccountPicker({
+    label,
+    accounts,
+    value,
+    onChange,
+    placeholder,
+}: {
+    label: string;
+    accounts: Account[];
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+}) {
     return (
         <div className="grid gap-1.5">
             <Label>{label}</Label>
@@ -69,12 +81,16 @@ export default function Integrations({
     const mForm = useForm({ ad_account_id: String(meta?.settings?.ad_account_id ?? '') });
 
     const disconnect = (i?: Integration) =>
-        i && confirm('Odłączyć integrację? Pobrane dane zostaną.') && router.delete(`/clients/${client.id}/integrations/${i.id}`, { preserveScroll: true });
+        i &&
+        confirm('Odłączyć integrację? Pobrane dane zostaną.') &&
+        router.delete(`/clients/${client.id}/integrations/${i.id}`, { preserveScroll: true });
 
     return (
         <ClientLayout client={client} title="Integracje">
             {client.is_demo && (
-                <div className="rounded-lg border border-dashed p-3 text-sm">To klient demo – dane są generowane. Dla prawdziwego klienta połącz konta poniżej.</div>
+                <div className="rounded-lg border border-dashed p-3 text-sm">
+                    To klient demo – dane są generowane. Dla prawdziwego klienta połącz konta poniżej.
+                </div>
             )}
 
             <Section
@@ -128,7 +144,11 @@ export default function Integrations({
                                 />
                                 <div className="grid gap-1.5">
                                     <Label>Konto MCC (login-customer-id)</Label>
-                                    <Input value={gForm.data.login_customer_id} onChange={(e) => gForm.setData('login_customer_id', e.target.value)} placeholder="opcjonalnie" />
+                                    <Input
+                                        value={gForm.data.login_customer_id}
+                                        onChange={(e) => gForm.setData('login_customer_id', e.target.value)}
+                                        placeholder="opcjonalnie"
+                                    />
                                 </div>
                                 <AccountPicker
                                     label="Usługa GA4"
@@ -148,7 +168,11 @@ export default function Integrations({
                 )}
             </Section>
 
-            <Section title="Meta (Facebook / Instagram Ads)" description={`Wydatki, kliknięcia, wyniki kampanii i reklam, częstotliwość, ${client.goal === "leads" ? "kontakty (formularze, rejestracje)" : client.goal === "mixed" ? "zakupy i kontakty" : "zakupy"} z Pixela/CAPI.`} actions={<Status integration={meta} />}>
+            <Section
+                title="Meta (Facebook / Instagram Ads)"
+                description={`Wydatki, kliknięcia, wyniki kampanii i reklam, częstotliwość, ${client.goal === 'leads' ? 'kontakty (formularze, rejestracje)' : client.goal === 'mixed' ? 'zakupy i kontakty' : 'zakupy'} z Pixela/CAPI.`}
+                actions={<Status integration={meta} />}
+            >
                 {!client.meta_configured ? (
                     <SetupHint
                         lines={[
@@ -201,7 +225,8 @@ export default function Integrations({
 
             <Section title="GTM, Pixel, Consent Mode" description="Nie wymagają logowania – sprawdzamy je automatycznie w zakładce Audyt trackingu.">
                 <p className="text-muted-foreground text-sm">
-                    Audyt wykrywa kontenery GTM i analizuje ich zawartość (tagi GA4, konwersje Ads, Pixel, ustawienia zgód), bez dostępu do konta GTM klienta.
+                    Audyt wykrywa kontenery GTM i analizuje ich zawartość (tagi GA4, konwersje Ads, Pixel, ustawienia zgód), bez dostępu do konta GTM
+                    klienta.
                 </p>
             </Section>
         </ClientLayout>

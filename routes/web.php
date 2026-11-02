@@ -12,7 +12,7 @@ use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 
 // Strona główna → logowanie / panel (strona ofertowa agencji jest osobno)
-Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('home');
+Route::get('/', fn () => redirect()->route(auth()->check() ? 'clients.index' : 'login'))->name('home');
 
 // Publiczny raport dla klienta (link z tokenem, bez logowania)
 Route::get('r/{token}/{report}', [ReportController::class, 'public'])->name('public.report');
@@ -24,6 +24,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::resource('clients', ClientController::class)->except('show');
     Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
+    Route::patch('clients/{client}/notes', [ClientController::class, 'updateNotes'])->name('clients.notes');
+    Route::get('clients/{client}/ads', [ClientController::class, 'ads'])->name('clients.ads');
     Route::get('clients/{client}/recommendations', [ClientController::class, 'recommendations'])->name('clients.recommendations');
     Route::post('clients/{client}/sync', [ClientController::class, 'sync'])->name('clients.sync');
     Route::post('clients/{client}/archive', [ClientController::class, 'archive'])->name('clients.archive');

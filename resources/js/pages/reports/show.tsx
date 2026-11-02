@@ -61,7 +61,12 @@ export default function ReportShow({
                                     <Download className="size-4" /> PDF
                                 </a>
                             </Button>
-                            <Button size="sm" disabled={!client.contact_email} onClick={() => router.post(`/reports/${report.id}/send`)} title={client.contact_email ?? 'Brak e-maila klienta'}>
+                            <Button
+                                size="sm"
+                                disabled={!client.contact_email}
+                                onClick={() => router.post(`/reports/${report.id}/send`)}
+                                title={client.contact_email ?? 'Brak e-maila klienta'}
+                            >
                                 <Mail className="size-4" /> {report.sent_at ? 'Wyślij ponownie' : 'Wyślij klientowi'}
                             </Button>
                         </>
@@ -90,7 +95,10 @@ export default function ReportShow({
             </div>
 
             {isClient && (
-                <Section title="Słowo od specjalisty" description="Twój komentarz na początku raportu – np. co zrobiliśmy, na co zwrócić uwagę. Widoczny dla klienta.">
+                <Section
+                    title="Słowo od specjalisty"
+                    description="Twój komentarz na początku raportu – np. co zrobiliśmy, na co zwrócić uwagę. Widoczny dla klienta."
+                >
                     <form
                         onSubmit={(e) => {
                             e.preventDefault();

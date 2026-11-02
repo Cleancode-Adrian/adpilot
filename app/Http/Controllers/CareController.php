@@ -49,7 +49,7 @@ class CareController extends Controller
         return Inertia::render('care', [
             'period' => $period,
             'rows' => $rows,
-            'clientsWithoutPlan' => Client::active()->where('is_demo', false)->whereDoesntHave('careTemplates')->orderBy('name')->get(['id', 'name']),
+            'clientsWithoutPlan' => Client::active()->where('has_care', true)->whereDoesntHave('careTemplates')->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

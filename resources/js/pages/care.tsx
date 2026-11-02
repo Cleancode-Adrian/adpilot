@@ -67,12 +67,12 @@ export default function CareOverview({
     const overdue = rows.reduce((s, r) => s + r.summary.overdue, 0);
 
     return (
-        <AppLayout breadcrumbs={[{ title: 'Opieka nad stronami', href: '/care' }]}>
-            <Head title="Opieka nad stronami" />
+        <AppLayout breadcrumbs={[{ title: 'Zadania i opieka', href: '/care' }]}>
+            <Head title="Zadania i opieka" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-semibold">Opieka nad stronami</h1>
+                        <h1 className="text-xl font-semibold">Zadania i opieka nad stronami</h1>
                         <p className="text-muted-foreground text-sm">
                             {total
                                 ? `Wykonano ${done} z ${total} zadań u ${rows.length} ${rows.length === 1 ? 'klienta' : 'klientów'}`

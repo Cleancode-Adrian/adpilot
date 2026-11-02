@@ -199,7 +199,7 @@ export default function Care({
     );
 
     return (
-        <ClientLayout client={client} title="Opieka">
+        <ClientLayout client={client} title="Zadania i opieka">
             <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
                 <div className="grid content-start gap-4">
                     {overdue.length > 0 && (

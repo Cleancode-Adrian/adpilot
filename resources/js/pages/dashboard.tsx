@@ -56,36 +56,37 @@ export default function Dashboard({
     archivedCount: number;
 }) {
     return (
-        <AppLayout breadcrumbs={[{ title: 'Pulpit', href: '/dashboard' }]}>
-            <Head title="Pulpit" />
+        <AppLayout breadcrumbs={[{ title: 'Wyniki reklam', href: '/dashboard' }]}>
+            <Head title="Wyniki reklam" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h1 className="text-xl font-semibold">{showArchived ? 'Klienci w archiwum' : 'Klienci'}</h1>
+                        <h1 className="text-xl font-semibold">{showArchived ? 'Reklamy – klienci w archiwum' : 'Wyniki reklam'}</h1>
                         <p className="text-muted-foreground text-sm">
-                            Ostatnie 30 dni ({new Date(period.from).toLocaleDateString('pl-PL')} – {new Date(period.to).toLocaleDateString('pl-PL')}) vs poprzednie 30 dni
+                            Ostatnie 30 dni ({new Date(period.from).toLocaleDateString('pl-PL')} – {new Date(period.to).toLocaleDateString('pl-PL')})
+                            vs poprzednie 30 dni
                         </p>
                     </div>
                     <div className="flex gap-2">
-                    {(archivedCount > 0 || showArchived) && (
-                        <Button asChild variant="outline">
-                            <Link href={showArchived ? '/dashboard' : '/dashboard?archived=1'}>
-                                <Archive className="size-4" /> {showArchived ? 'Aktywni klienci' : `Archiwum (${archivedCount})`}
+                        {(archivedCount > 0 || showArchived) && (
+                            <Button asChild variant="outline">
+                                <Link href={showArchived ? '/dashboard' : '/dashboard?archived=1'}>
+                                    <Archive className="size-4" /> {showArchived ? 'Aktywni klienci' : `Archiwum (${archivedCount})`}
+                                </Link>
+                            </Button>
+                        )}
+                        <Button asChild>
+                            <Link href="/clients/create">
+                                <PlusCircle className="size-4" /> Dodaj klienta
                             </Link>
                         </Button>
-                    )}
-                    <Button asChild>
-                        <Link href="/clients/create">
-                            <PlusCircle className="size-4" /> Dodaj klienta
-                        </Link>
-                    </Button>
                     </div>
                 </div>
 
                 {clients.length === 0 ? (
                     <EmptyState title="Nie masz jeszcze klientów">
-                        Dodaj pierwszego klienta – podaj adres sklepu, a system od razu zrobi audyt pomiaru. Chcesz najpierw zobaczyć, jak to działa? Uruchom{' '}
-                        <code className="bg-muted rounded px-1">php artisan adpilot:demo</code>.
+                        Dodaj pierwszego klienta – podaj adres sklepu, a system od razu zrobi audyt pomiaru. Chcesz najpierw zobaczyć, jak to działa?
+                        Uruchom <code className="bg-muted rounded px-1">php artisan adpilot:demo</code>.
                     </EmptyState>
                 ) : (
                     <div className="bg-card overflow-x-auto rounded-xl border">
@@ -104,12 +105,14 @@ export default function Dashboard({
                                 {clients.map((c) => (
                                     <tr key={c.id} className="hover:bg-muted/40 border-b last:border-0">
                                         <td className="px-4 py-3">
-                                            <Link href={`/clients/${c.id}`} className="font-medium hover:underline">
+                                            <Link href={`/clients/${c.id}/ads`} className="font-medium hover:underline">
                                                 {c.name}
                                             </Link>
                                             {c.is_demo && <FlaskConical className="text-muted-foreground ml-1 inline size-3.5" aria-label="demo" />}
                                             <div className="text-muted-foreground text-xs">{c.website_url.replace(/^https?:\/\//, '')}</div>
-                                            {c.sync_error && <div className="text-xs text-red-700 dark:text-red-400">Błąd synchronizacji – sprawdź integracje</div>}
+                                            {c.sync_error && (
+                                                <div className="text-xs text-red-700 dark:text-red-400">Błąd synchronizacji – sprawdź integracje</div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
                                             {money(c.cost.value, c.currency)}
@@ -133,7 +136,9 @@ export default function Dashboard({
                                                 <>
                                                     <span className="font-medium">{money(c.cpa.value, c.currency, 2)}</span>
                                                     <Delta d={c.cpa.delta} inverse />
-                                                    {c.target_cpa && <div className="text-muted-foreground text-xs">cel {money(c.target_cpa, c.currency)}</div>}
+                                                    {c.target_cpa && (
+                                                        <div className="text-muted-foreground text-xs">cel {money(c.target_cpa, c.currency)}</div>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>
@@ -145,7 +150,10 @@ export default function Dashboard({
                                         </td>
                                         <td className="px-4 py-3 text-right tabular-nums">{c.audit_score !== null ? `${c.audit_score}/100` : '–'}</td>
                                         <td className="px-4 py-3">
-                                            <Link href={`/clients/${c.id}/recommendations`} className="inline-flex items-center gap-2 hover:underline">
+                                            <Link
+                                                href={`/clients/${c.id}/recommendations`}
+                                                className="inline-flex items-center gap-2 hover:underline"
+                                            >
                                                 {c.critical_count > 0 && (
                                                     <span className="inline-flex items-center gap-1 text-xs font-medium text-[#b42f2f] dark:text-[#f08080]">
                                                         <AlertOctagon className="size-3.5" /> {c.critical_count} krytyczne

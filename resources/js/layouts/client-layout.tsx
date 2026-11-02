@@ -4,22 +4,45 @@ import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { type ClientProps } from '@/types/adpilot';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlarmClock, ExternalLink, FlaskConical, Pencil, RefreshCw } from 'lucide-react';
+import { AlarmClock, ExternalLink, FlaskConical, LogIn, Pencil, RefreshCw } from 'lucide-react';
+
+interface Tab {
+    href: string;
+    label: string;
+}
 
 export default function ClientLayout({ client, title, children }: { client: ClientProps; title: string; children: React.ReactNode }) {
     const { url, props } = usePage<SharedData>();
     const base = `/clients/${client.id}`;
-    const tabs = [
-        { href: base, label: 'Przegląd' },
-        { href: `${base}/recommendations`, label: `Do zrobienia${client.open_count ? ` (${client.open_count})` : ''}` },
-        { href: `${base}/audit`, label: 'Audyt trackingu' },
-        { href: `${base}/integrations`, label: 'Integracje' },
-        { href: `${base}/reports`, label: 'Raporty' },
-        { href: `${base}/care`, label: `Opieka${client.care?.total ? ` (${client.care.done}/${client.care.total})` : ''}` },
-        ...(props.admin
-            ? [{ href: `${base}/credentials`, label: `Dostępy${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
+
+    // Zakładki w grupach: klient → opieka/zadania → reklamy (tylko gdy klient ma tę usługę)
+    const groups: { label: string; tabs: Tab[] }[] = [
+        {
+            label: 'Klient',
+            tabs: [
+                { href: base, label: 'Karta' },
+                ...(props.admin
+                    ? [{ href: `${base}/credentials`, label: `Dostępy${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
+                    : []),
+                { href: `${base}/care`, label: `Zadania i opieka${client.care?.total ? ` (${client.care.done}/${client.care.total})` : ''}` },
+            ],
+        },
+        ...(client.has_ads
+            ? [
+                  {
+                      label: 'Reklamy',
+                      tabs: [
+                          { href: `${base}/ads`, label: 'Wyniki' },
+                          { href: `${base}/recommendations`, label: `Zadania reklamowe${client.open_count ? ` (${client.open_count})` : ''}` },
+                          { href: `${base}/audit`, label: 'Audyt pomiaru' },
+                          { href: `${base}/integrations`, label: 'Integracje' },
+                          { href: `${base}/reports`, label: 'Raporty' },
+                      ],
+                  },
+              ]
             : []),
     ];
+
     const care = client.care;
     const careLeft = care ? care.total - care.done : 0;
     const path = url.split('?')[0];
@@ -33,7 +56,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
     return (
         <AppLayout
             breadcrumbs={[
-                { title: 'Klienci', href: '/dashboard' },
+                { title: 'Klienci', href: '/clients' },
                 { title: client.name, href: base },
             ]}
         >
@@ -57,41 +80,61 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                         >
                             {client.website_url} <ExternalLink className="size-3" />
                         </a>
-                        <div className="text-muted-foreground mt-0.5 text-xs">
-                            {client.goal === 'leads' ? 'Kontakty (leady)' : client.goal === 'mixed' ? 'Sprzedaż i kontakty' : 'Sprzedaż'} ·{' '}
-                            {client.goal !== 'leads' && <>Cel ROAS: {client.target_roas ? `${client.target_roas * 100}%` : '–'} · </>}
-                            {client.goal === 'leads' ? 'Cel kosztu leada' : 'Cel CPA'}: {client.target_cpa ?? '–'} {client.currency} · Budżet:{' '}
-                            {client.daily_budget
-                                ? `${client.daily_budget} ${client.currency}/dzień`
-                                : `${client.monthly_budget ?? '–'} ${client.currency}/mies.`}{' '}
-                            · Ostatnia synchronizacja:{' '}
-                            {lastSync ? new Date(lastSync).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' }) : 'nigdy'}
-                        </div>
+                        {client.has_ads && path !== base && (
+                            <div className="text-muted-foreground mt-0.5 text-xs">
+                                {client.goal === 'leads' ? 'Kontakty (leady)' : client.goal === 'mixed' ? 'Sprzedaż i kontakty' : 'Sprzedaż'} ·{' '}
+                                {client.goal !== 'leads' && <>Cel ROAS: {client.target_roas ? `${client.target_roas * 100}%` : '–'} · </>}
+                                {client.goal === 'leads' ? 'Cel kosztu leada' : 'Cel CPA'}: {client.target_cpa ?? '–'} {client.currency} · Budżet:{' '}
+                                {client.daily_budget
+                                    ? `${client.daily_budget} ${client.currency}/dzień`
+                                    : `${client.monthly_budget ?? '–'} ${client.currency}/mies.`}{' '}
+                                · Ostatnia synchronizacja:{' '}
+                                {lastSync ? new Date(lastSync).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' }) : 'nigdy'}
+                            </div>
+                        )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        {client.admin_url && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a href={client.admin_url} target="_blank" rel="noreferrer noopener">
+                                    <LogIn className="size-4" /> Panel strony
+                                </a>
+                            </Button>
+                        )}
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`${base}/edit`}>
                                 <Pencil className="size-4" /> Edytuj
                             </Link>
                         </Button>
-                        <Button size="sm" onClick={() => router.post(`${base}/sync`, {}, { preserveScroll: true })}>
-                            <RefreshCw className="size-4" /> Synchronizuj
-                        </Button>
+                        {client.has_ads && (
+                            <Button size="sm" onClick={() => router.post(`${base}/sync`, {}, { preserveScroll: true })}>
+                                <RefreshCw className="size-4" /> Synchronizuj
+                            </Button>
+                        )}
                     </div>
                 </div>
 
-                <nav className="flex gap-1 overflow-x-auto border-b">
-                    {tabs.map((t) => (
-                        <Link
-                            key={t.href}
-                            href={t.href}
-                            className={cn(
-                                '-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap transition',
-                                path === t.href ? 'border-foreground font-medium' : 'text-muted-foreground hover:text-foreground border-transparent',
+                <nav className="flex items-end gap-1 overflow-x-auto border-b">
+                    {groups.map((g, gi) => (
+                        <div key={g.label} className={cn('flex items-end gap-1', gi > 0 && 'ml-3 border-l pl-3')}>
+                            {groups.length > 1 && (
+                                <span className="text-muted-foreground pr-1 pb-2.5 text-[11px] font-medium tracking-wide uppercase">{g.label}</span>
                             )}
-                        >
-                            {t.label}
-                        </Link>
+                            {g.tabs.map((t) => (
+                                <Link
+                                    key={t.href}
+                                    href={t.href}
+                                    className={cn(
+                                        '-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap transition',
+                                        path === t.href
+                                            ? 'border-foreground font-medium'
+                                            : 'text-muted-foreground hover:text-foreground border-transparent',
+                                    )}
+                                >
+                                    {t.label}
+                                </Link>
+                            ))}
+                        </div>
                     ))}
                 </nav>
 
@@ -102,7 +145,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                     >
                         <AlarmClock className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
                         <span>
-                            <strong>Opieka nad stroną:</strong> {care.overdue > 0 && <>{care.overdue} po terminie</>}
+                            <strong>Zadania:</strong> {care.overdue > 0 && <>{care.overdue} po terminie</>}
                             {care.overdue > 0 && care.due_today > 0 && ', '}
                             {care.due_today > 0 && <>{care.due_today} na dziś</>}
                             {careLeft > 0 && (

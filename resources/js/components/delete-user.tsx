@@ -46,9 +46,7 @@ export default function DeleteUser() {
                     </DialogTrigger>
                     <DialogContent>
                         <DialogTitle>Na pewno usunąć konto?</DialogTitle>
-                        <DialogDescription>
-                            Po usunięciu konta nie będzie można go przywrócić. Podaj hasło, aby potwierdzić.
-                        </DialogDescription>
+                        <DialogDescription>Po usunięciu konta nie będzie można go przywrócić. Podaj hasło, aby potwierdzić.</DialogDescription>
                         <form className="space-y-6" onSubmit={deleteUser}>
                             <div className="grid gap-2">
                                 <Label htmlFor="password" className="sr-only">

@@ -90,9 +90,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     </Button>
                 </div>
 
-                <div className="text-muted-foreground text-center text-sm">
-                    Nie masz konta? Poproś administratora o zaproszenie.
-                </div>
+                <div className="text-muted-foreground text-center text-sm">Nie masz konta? Poproś administratora o zaproszenie.</div>
             </form>
 
             {status && <div className="mb-4 text-center text-sm font-medium text-green-600">{status}</div>}
