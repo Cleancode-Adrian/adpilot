@@ -22,7 +22,7 @@ echo "→ Migracje bazy"
 php artisan migrate --force
 
 echo "→ Cache konfiguracji"
-php artisan storage:link 2>/dev/null || true
+[ -e public/storage ] || php artisan storage:link
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
