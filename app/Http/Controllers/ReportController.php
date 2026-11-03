@@ -55,6 +55,8 @@ class ReportController extends Controller
             'items.*.description' => 'nullable|string|max:10000',
             'items.*.date' => 'nullable|date',
             'items.*.task_id' => 'nullable|integer',
+            'items.*.minutes' => 'nullable|integer|min:0|max:10000',
+            'show_time' => 'boolean',
         ]);
         $data = $report->data;
         $data['items'] = collect($v['items'] ?? [])->map(fn ($i) => [
@@ -62,7 +64,9 @@ class ReportController extends Controller
             'title' => $i['title'],
             'description' => (string) ($i['description'] ?? ''),
             'date' => isset($i['date']) ? substr($i['date'], 0, 10) : null,
+            'minutes' => isset($i['minutes']) ? (int) $i['minutes'] : null,
         ])->values()->all();
+        $data['show_time'] = (bool) ($v['show_time'] ?? false);
         $report->update(['note' => $v['note'] ?? null, 'data' => $data]);
 
         return back()->with('success', 'Zapisano raport.');

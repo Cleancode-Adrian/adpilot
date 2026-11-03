@@ -1,4 +1,4 @@
-import { localDate } from '@/components/adpilot/care-task-row';
+import { formatMinutes, localDate } from '@/components/adpilot/care-task-row';
 import { Section } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ type Item = {
     title: string;
     description: string;
     date: string | null;
+    minutes?: number | null;
 };
 
 interface WorkReport {
@@ -22,7 +23,7 @@ interface WorkReport {
     note: string | null;
     sent_at: string | null;
     updated_at: string;
-    data: { items: Item[] };
+    data: { items: Item[]; show_time?: boolean };
 }
 
 const MONTHS = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad', 'grudzień'];
@@ -41,12 +42,18 @@ export default function WorkReportEditor({
     const [note, setNote] = useState(report.note ?? '');
     const [items, setItems] = useState<Item[]>(report.data.items ?? []);
     const [saving, setSaving] = useState(false);
+    const [showTime, setShowTime] = useState<boolean>(report.data.show_time ?? (report.data.items ?? []).some((i) => i.minutes));
+    const totalMinutes = items.reduce((s, i) => s + (i.minutes ?? 0), 0);
 
     // po „Dodaj nowe wykonane zadania” serwer zwraca nową listę
     useEffect(() => setItems(report.data.items ?? []), [report.data.items]);
 
-    const initial = JSON.stringify({ n: report.note ?? '', i: report.data.items ?? [] });
-    const dirty = JSON.stringify({ n: note, i: items }) !== initial;
+    const initial = JSON.stringify({
+        n: report.note ?? '',
+        i: report.data.items ?? [],
+        t: report.data.show_time ?? (report.data.items ?? []).some((i) => i.minutes),
+    });
+    const dirty = JSON.stringify({ n: note, i: items, t: showTime }) !== initial;
     const d = new Date(`${report.period_start.slice(0, 10)}T12:00:00`);
     const month = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 
@@ -64,7 +71,7 @@ export default function WorkReportEditor({
         setSaving(true);
         router.put(
             `/reports/${report.id}/work`,
-            { note: note || null, items: items.filter((i) => i.title.trim()) },
+            { note: note || null, items: items.filter((i) => i.title.trim()), show_time: showTime },
             { preserveScroll: true, onFinish: () => setSaving(false), onSuccess: () => after?.() },
         );
     };
@@ -131,10 +138,13 @@ export default function WorkReportEditor({
             </Section>
 
             <Section
-                title={`Wykonane prace (${items.length})`}
+                title={`Wykonane prace (${items.length})${totalMinutes ? ` · ${formatMinutes(totalMinutes)}` : ''}`}
                 description="Pozycje z odhaczonych zadań – tytuł i opis możesz zmienić tylko w raporcie (zadania zostają bez zmian)."
                 actions={
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-sm">
+                            <input type="checkbox" checked={showTime} onChange={(e) => setShowTime(e.target.checked)} /> Pokaż klientowi czas pracy
+                        </label>
                         <Button
                             variant="outline"
                             size="sm"
@@ -174,6 +184,16 @@ export default function WorkReportEditor({
                                         onChange={(e) => set(i, { date: e.target.value || null })}
                                         className="w-40"
                                         aria-label="Data"
+                                    />
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        value={it.minutes ?? ''}
+                                        onChange={(e) => set(i, { minutes: e.target.value === '' ? null : Number(e.target.value) })}
+                                        className="w-24"
+                                        placeholder="min"
+                                        title="Czas pracy (minuty)"
+                                        aria-label="Czas pracy w minutach"
                                     />
                                     <div className="flex">
                                         <Button variant="ghost" size="sm" title="Wyżej" disabled={i === 0} onClick={() => move(i, -1)}>

@@ -111,6 +111,8 @@ class Client extends Model
     public function wpSite(): HasOne { return $this->hasOne(WpSite::class); }
     public function siteMonitor(): HasOne { return $this->hasOne(SiteMonitor::class); }
     public function siteAudits(): HasMany { return $this->hasMany(SiteAudit::class); }
+    public function billingItems(): HasMany { return $this->hasMany(BillingItem::class); }
+    public function quotes(): HasMany { return $this->hasMany(Quote::class); }
     public function wpEvents(): HasMany { return $this->hasMany(WpEvent::class); }
 
     public function latestAudit(): HasOne

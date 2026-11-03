@@ -1,6 +1,9 @@
 @php
     $items = collect($d['items'] ?? []);
     $month = \App\Services\Reports\WorkReportBuilder::monthLabel($report->period_start);
+    $showTime = (bool) ($d['show_time'] ?? false);
+    $total = (int) $items->sum(fn ($i) => (int) ($i['minutes'] ?? 0));
+    $fmt = fn (int $m) => $m >= 60 ? intdiv($m, 60).' h'.($m % 60 ? ' '.($m % 60).' min' : '') : $m.' min';
 @endphp
 <!DOCTYPE html>
 <html lang="pl">
@@ -55,7 +58,7 @@
         </tr>
     </table>
 
-    <div class="count">Wykonane prace: <strong>{{ $items->count() }}</strong></div>
+    <div class="count">Wykonane prace: <strong>{{ $items->count() }}</strong>@if($showTime && $total) &nbsp;·&nbsp; Czas pracy: <strong>{{ $fmt($total) }}</strong>@endif</div>
 
     @if($noteHtml)
         <h2>Podsumowanie</h2>
@@ -68,7 +71,7 @@
     @else
         <table class="items">
             <thead>
-                <tr><th></th><th>Data</th><th>Zakres prac</th></tr>
+                <tr><th></th><th>Data</th><th>Zakres prac</th>@if($showTime)<th style="text-align:right">Czas</th>@endif</tr>
             </thead>
             <tbody>
                 @foreach($items as $i)
@@ -81,6 +84,7 @@
                                 <div class="desc">{{ $i['description'] }}</div>
                             @endif
                         </td>
+                        @if($showTime)<td class="date" style="text-align:right">{{ ! empty($i['minutes']) ? $fmt((int) $i['minutes']) : '' }}</td>@endif
                     </tr>
                 @endforeach
             </tbody>

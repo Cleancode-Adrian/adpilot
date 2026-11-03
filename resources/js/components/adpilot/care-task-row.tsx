@@ -3,7 +3,7 @@ import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type CareStatus, type CareTask } from '@/types/adpilot';
 import { router } from '@inertiajs/react';
-import { AlarmClock, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
+import { AlarmClock, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 /** Data lokalna RRRR-MM-DD (nie UTC – inaczej po północy byłby poprzedni dzień). */
@@ -75,6 +75,67 @@ function DueBadge({ task }: { task: CareTask }) {
     return <span className="text-muted-foreground text-xs">do {date(task.due_date)}</span>;
 }
 
+/** 90 → „1 h 30 min” */
+export const formatMinutes = (m: number | null | undefined) => {
+    if (!m) return '';
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return h ? `${h} h${r ? ` ${r} min` : ''}` : `${r} min`;
+};
+
+/** „1:30”, „1,5 h”, „90”, „45m” → minuty */
+const parseMinutes = (v: string): number | null => {
+    const s = v.trim().toLowerCase().replace(',', '.');
+    if (!s) return null;
+    const hm = s.match(/^(\d+):(\d{1,2})$/);
+    if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+    const h = s.match(/^(\d+(?:\.\d+)?)\s*h$/);
+    if (h) return Math.round(Number(h[1]) * 60);
+    const m = s.match(/^(\d+)\s*(m|min)?$/);
+    return m ? Number(m[1]) : null;
+};
+
+/** Czas pracy: pole + szybkie przyciski (dodają do wpisanego). */
+function TimeInput({ task, onSave }: { task: CareTask; onSave: (minutes: number | null) => void }) {
+    const [value, setValue] = useState(task.minutes ? String(task.minutes) : '');
+    const save = (v: string) => {
+        const m = parseMinutes(v);
+        if (m !== (task.minutes ?? null)) onSave(m);
+    };
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            <Timer className="text-muted-foreground size-4" />
+            <span className="text-muted-foreground text-xs">Czas pracy:</span>
+            <input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onBlur={(e) => save(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                placeholder="min, np. 45 lub 1:30"
+                className="border-input bg-background h-7 w-36 rounded-md border px-2 text-sm"
+                aria-label="Czas pracy w minutach"
+            />
+            {[15, 30, 60].map((n) => (
+                <Button
+                    key={n}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                        const next = (parseMinutes(value) ?? 0) + n;
+                        setValue(String(next));
+                        onSave(next);
+                    }}
+                >
+                    +{n < 60 ? `${n} min` : '1 h'}
+                </Button>
+            ))}
+            {task.minutes ? <span className="text-muted-foreground text-xs">= {formatMinutes(task.minutes)}</span> : null}
+        </div>
+    );
+}
+
 export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; showPeriod?: boolean }) {
     const [open, setOpen] = useState(false);
     const [note, setNote] = useState(task.note ?? '');
@@ -82,7 +143,7 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
     const done = task.status === 'done';
     const skipped = task.status === 'skipped';
 
-    const update = (data: { status?: CareStatus; note?: string | null; due_date?: string }) =>
+    const update = (data: { status?: CareStatus; note?: string | null; due_date?: string; minutes?: number | null }) =>
         router.patch(`/care/tasks/${task.id}`, data, { preserveScroll: true, preserveState: true });
 
     return (
@@ -93,7 +154,10 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                     className="mt-1 size-4 shrink-0 cursor-pointer accent-current"
                     checked={done}
                     disabled={skipped}
-                    onChange={(e) => update({ status: e.target.checked ? 'done' : 'todo' })}
+                    onChange={(e) => {
+                        update({ status: e.target.checked ? 'done' : 'todo' });
+                        if (e.target.checked) setOpen(true);
+                    }}
                     aria-label={done ? 'Oznacz jako niewykonane' : 'Oznacz jako wykonane'}
                 />
                 <div className="min-w-0 flex-1">
@@ -101,7 +165,7 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         <span className={cn('flex-1 text-sm font-medium', (done || skipped) && 'text-muted-foreground line-through')}>
                             {task.title}
                         </span>
-                        {(task.description || task.note) && (
+                        {(task.description || task.note || done) && (
                             <ChevronDown className={cn('mt-0.5 size-4 shrink-0 opacity-50 transition', !open && '-rotate-90')} />
                         )}
                     </button>
@@ -124,6 +188,11 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         {task.note && !open && (
                             <span className="text-muted-foreground inline-flex items-center gap-1">
                                 <MessageSquare className="size-3" /> notatka
+                            </span>
+                        )}
+                        {!!task.minutes && (
+                            <span className="text-muted-foreground inline-flex items-center gap-1">
+                                <Timer className="size-3" /> {formatMinutes(task.minutes)}
                             </span>
                         )}
                         {!task.care_template_id && <span className="text-muted-foreground">jednorazowe</span>}
@@ -151,6 +220,7 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                                 placeholder="Notatka z wykonania (np. zaktualizowano 12 wtyczek, wersja WP 6.9, problem z…) – zapisuje się automatycznie"
                                 className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                             />
+                            {task.status !== 'skipped' && <TimeInput task={task} onSave={(minutes) => update({ minutes })} />}
                         </div>
                     )}
                 </div>

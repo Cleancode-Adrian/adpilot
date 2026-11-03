@@ -162,6 +162,8 @@ Schedule::call(fn () => \App\Models\SiteMonitor::where('enabled', true)->whereHa
     ->each(fn ($m) => app(\App\Services\Monitoring\UptimeMonitor::class)->checkSsl($m)))->dailyAt('07:10')->name('adpilot-ssl');
 Schedule::call(fn () => Client::active()->where('is_demo', false)->where('has_care', true)->get()
     ->each(fn ($c) => \App\Jobs\RunSiteAuditJob::dispatch(app(\App\Services\SiteAudit\SiteAuditor::class)->start($c))))->monthlyOn(1, '03:30')->name('adpilot-site-audits');
+// Rozliczenia: przypomnienia o fakturach i odnowieniach (zadania u klienta + e-mail)
+Schedule::call(fn () => app(\App\Services\Billing\BillingService::class)->remind())->dailyAt('07:20')->name('adpilot-billing');
 Schedule::command('adpilot:digest')->dailyAt('08:00');
 Schedule::command('adpilot:backup')->dailyAt('03:00');
 Schedule::command('adpilot:monthly-reports')->monthlyOn(2, '07:00');

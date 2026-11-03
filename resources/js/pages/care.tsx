@@ -1,4 +1,4 @@
-import { CareProgress, CareTaskRow, MonthSwitcher } from '@/components/adpilot/care-task-row';
+import { CareProgress, CareTaskRow, formatMinutes, MonthSwitcher } from '@/components/adpilot/care-task-row';
 import { EmptyState } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -33,6 +33,7 @@ function ClientCare({ row, defaultOpen }: { row: Row; defaultOpen: boolean }) {
                         </span>
                     )}
                     {summary.total > 0 && <span className="text-muted-foreground">{left === 0 ? 'miesiąc zamknięty ✓' : `zostało ${left}`}</span>}
+                    {!!summary.minutes && <span className="text-muted-foreground tabular-nums">⏱ {formatMinutes(summary.minutes)}</span>}
                     {summary.total > 0 && <CareProgress done={summary.done} total={summary.total} />}
                     <Button variant="ghost" size="sm" asChild>
                         <Link href={`/clients/${client.id}/care?month=${summary.period}`}>

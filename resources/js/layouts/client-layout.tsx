@@ -28,6 +28,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                 { href: `${base}/site`, label: `Strona${client.site?.status === 'down' ? ' ⚠' : ''}` },
                 { href: `${base}/wordpress`, label: `WordPress${client.wp?.alerts ? ` (${client.wp.alerts})` : ''}` },
                 { href: `${base}/reports`, label: 'Raporty' },
+                ...(props.admin ? [{ href: `${base}/billing`, label: 'Oferty i rozliczenia' }] : []),
             ],
         },
         ...(client.has_ads

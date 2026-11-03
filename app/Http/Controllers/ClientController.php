@@ -98,7 +98,7 @@ class ClientController extends Controller
         return Inertia::render('clients/card', [
             'client' => $this->clientProps($client),
             'upcoming' => $client->careTasks()->todo()->where('period', '<=', $period)->orderBy('due_date')->limit(8)
-                ->get(['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note']),
+                ->get(['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note', 'minutes']),
             'adsKpis' => $client->has_ads ? (new Metrics($client))->kpis(CarbonImmutable::yesterday()->subDays(29), CarbonImmutable::yesterday()) : null,
         ]);
     }

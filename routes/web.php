@@ -8,6 +8,8 @@ use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\RecommendationController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\WordPressController;
 use App\Http\Controllers\ReportController;
@@ -20,6 +22,10 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'clients.index' : '
 Route::get('r/{token}/{report}', [ReportController::class, 'public'])->name('public.report');
 Route::get('r/{token}/{report}/pdf', [ReportController::class, 'pdf'])->name('public.report.pdf');
 Route::get('a/{token}/{audit}', [SiteController::class, 'public'])->name('public.site-audit');
+// Oferta dla klienta: podgląd, PDF, akceptacja / odrzucenie (link z tokenem, bez logowania)
+Route::get('o/{token}', [QuoteController::class, 'public'])->name('public.quote');
+Route::get('o/{token}/pdf', [QuoteController::class, 'pdf'])->name('public.quote.pdf');
+Route::post('o/{token}', [QuoteController::class, 'decide'])->middleware('throttle:10,1')->name('public.quote.decide');
 Route::get('a/{token}/{audit}/pdf', [SiteController::class, 'pdf'])->name('public.site-audit.pdf');
 
 Route::middleware(['auth'])->group(function () {
@@ -61,6 +67,26 @@ Route::middleware(['auth'])->group(function () {
     Route::post('clients/{client}/care/preset', [CareController::class, 'applyPreset'])->name('care.preset');
     Route::patch('care/templates/{template}', [CareController::class, 'updateTemplate'])->name('care.templates.update');
     Route::delete('care/templates/{template}', [CareController::class, 'destroyTemplate'])->name('care.templates.destroy');
+
+    // Oferty i rozliczenia – tylko administratorzy (ceny, przychody)
+    Route::middleware('can:admin')->group(function () {
+        Route::get('quotes', [QuoteController::class, 'index'])->name('quotes.index');
+        Route::post('quotes', [QuoteController::class, 'store'])->name('quotes.store');
+        Route::get('quotes/{quote}', [QuoteController::class, 'edit'])->name('quotes.edit');
+        Route::put('quotes/{quote}', [QuoteController::class, 'update'])->name('quotes.update');
+        Route::post('quotes/{quote}/send', [QuoteController::class, 'send'])->middleware('throttle:10,1')->name('quotes.send');
+        Route::post('quotes/{quote}/mark-sent', [QuoteController::class, 'markSent'])->name('quotes.mark-sent');
+        Route::post('quotes/{quote}/duplicate', [QuoteController::class, 'duplicate'])->name('quotes.duplicate');
+        Route::delete('quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
+
+        Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        Route::get('clients/{client}/billing', [BillingController::class, 'client'])->name('clients.billing');
+        Route::post('clients/{client}/billing', [BillingController::class, 'store'])->name('billing.store');
+        Route::put('billing/{item}', [BillingController::class, 'update'])->name('billing.update');
+        Route::delete('billing/{item}', [BillingController::class, 'destroy'])->name('billing.destroy');
+        Route::post('billing/{item}/advance', [BillingController::class, 'advance'])->name('billing.advance');
+        Route::post('billing/{item}/lookup', [BillingController::class, 'lookup'])->middleware('throttle:20,1')->name('billing.lookup');
+    });
 
     // Strona: dostępność, SSL, audyt SEO/techniczny
     Route::get('clients/{client}/site', [SiteController::class, 'index'])->name('clients.site');

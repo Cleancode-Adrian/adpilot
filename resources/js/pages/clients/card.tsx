@@ -1,4 +1,4 @@
-import { CareProgress, CareTaskRow, localDate } from '@/components/adpilot/care-task-row';
+import { CareProgress, CareTaskRow, formatMinutes, localDate } from '@/components/adpilot/care-task-row';
 import { Section } from '@/components/adpilot/ui';
 import { CopyButton, SecretValue } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
@@ -105,7 +105,14 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                     >
                         {client.care && client.care.total > 0 && (
                             <div className="mb-3">
-                                <CareProgress done={client.care.done} total={client.care.total} />
+                                <div className="flex flex-wrap items-center gap-4">
+                                    <CareProgress done={client.care.done} total={client.care.total} />
+                                    {!!client.care.minutes && (
+                                        <span className="text-muted-foreground text-xs">
+                                            czas pracy w tym miesiącu: {formatMinutes(client.care.minutes)}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
                         {upcoming.length === 0 ? (

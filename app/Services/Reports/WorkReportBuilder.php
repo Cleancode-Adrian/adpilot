@@ -64,6 +64,7 @@ class WorkReportBuilder
                 'task_id' => $t->id,
                 'title' => $t->title,
                 'description' => (string) $t->note,
+                'minutes' => $t->minutes,
                 'date' => ($t->done_at ?? CarbonImmutable::parse($t->due_date))->format('Y-m-d'),
             ]);
     }
