@@ -44,6 +44,8 @@ interface Row {
     care: CareSummary | null;
     wp_alerts: number;
     wp_connected: boolean;
+    site_down: boolean;
+    ssl_days: number | null;
 }
 
 type Filter = 'all' | 'general' | 'care' | 'ads';
@@ -97,6 +99,16 @@ function ClientCard({ c, isAdmin }: { c: Row; isAdmin: boolean }) {
                     )}
                     {c.has_care && (!c.care || c.care.total === 0) && (
                         <div className="text-muted-foreground">Brak planu opieki – ustaw w karcie klienta</div>
+                    )}
+                    {c.site_down && (
+                        <div className="inline-flex items-center gap-1 font-semibold text-[#b42f2f] dark:text-[#f08080]">
+                            <ShieldAlert className="size-3.5" /> Strona nie działa
+                        </div>
+                    )}
+                    {c.ssl_days !== null && c.ssl_days <= 14 && (
+                        <div className="inline-flex items-center gap-1 font-medium text-[#a4471f] dark:text-[#ec835a]">
+                            <AlarmClock className="size-3.5" /> {c.ssl_days < 0 ? 'Certyfikat SSL wygasł' : `SSL wygasa za ${c.ssl_days} dni`}
+                        </div>
                     )}
                     {c.wp_alerts > 0 && (
                         <div className="inline-flex items-center gap-1 font-medium text-[#b42f2f] dark:text-[#f08080]">

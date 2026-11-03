@@ -85,11 +85,15 @@ Artisan::command('adpilot:digest {--force : wyślij nawet gdy nie ma nic pilnego
         ->groupBy('client_id')->map(fn ($items) => ['id' => $items->first()->client_id, 'name' => $items->first()->client->name,
             'items' => $items->take(6)->map(fn ($e) => ['severity' => $e->severity, 'title' => $e->title])->values()->all()])->values()->all();
 
-    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care, 'wp' => $wp,
+    $sites = \App\Models\SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->get()
+        ->filter(fn ($m) => $m->status === 'down' || (($d = $m->sslDaysLeft()) !== null && $d <= 14))
+        ->map(fn ($m) => ['id' => $m->client_id, 'name' => $m->client->name, 'text' => $m->status === 'down' ? 'strona nie działa od '.$m->down_since?->format('d.m H:i') : 'certyfikat SSL wygasa za '.$m->sslDaysLeft().' dni'])->values()->all();
+
+    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care, 'wp' => $wp, 'sites' => $sites,
         'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)
             + \App\Models\CareTask::due(now()->subDay()->toDateString())->whereHas('client', fn ($q) => $q->active())->count()];
 
-    if (! $clients && ! $problems && ! $care && ! $wp && ! $this->option('force')) {
+    if (! $clients && ! $problems && ! $care && ! $wp && ! $sites && ! $this->option('force')) {
         $this->info('Nic pilnego – nie wysyłam.');
 
         return;
@@ -152,6 +156,12 @@ Schedule::call(fn () => app(\App\Services\Care\CarePlanner::class)->ensureAll())
 Schedule::call(fn () => \App\Models\WpSite::where('status', 'connected')->whereHas('client', fn ($q) => $q->active())->get()
     ->each(fn ($s) => \App\Jobs\PullWpSiteJob::dispatch($s, true)))->dailyAt('06:40')->name('adpilot-wp-pull');
 Schedule::call(fn () => app(\App\Services\WordPress\WpMonitor::class)->checkOffline())->hourly()->name('adpilot-wp-offline');
+// Dostępność stron co 5 min, certyfikaty SSL raz dziennie, audyt stron z opieką raz w miesiącu
+Schedule::job(new \App\Jobs\UptimeCheckJob)->everyFiveMinutes()->name('adpilot-uptime');
+Schedule::call(fn () => \App\Models\SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->get()
+    ->each(fn ($m) => app(\App\Services\Monitoring\UptimeMonitor::class)->checkSsl($m)))->dailyAt('07:10')->name('adpilot-ssl');
+Schedule::call(fn () => Client::active()->where('is_demo', false)->where('has_care', true)->get()
+    ->each(fn ($c) => \App\Jobs\RunSiteAuditJob::dispatch(app(\App\Services\SiteAudit\SiteAuditor::class)->start($c))))->monthlyOn(1, '03:30')->name('adpilot-site-audits');
 Schedule::command('adpilot:digest')->dailyAt('08:00');
 Schedule::command('adpilot:backup')->dailyAt('03:00');
 Schedule::command('adpilot:monthly-reports')->monthlyOn(2, '07:00');

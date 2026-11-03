@@ -30,6 +30,7 @@ export interface SharedData {
     admin: { problems: number } | null;
     care_due: number;
     wp_alerts: number;
+    sites_down: number;
     vault?: { unlocked_until: number | null; seconds: number };
     auth: Auth;
     [key: string]: unknown;

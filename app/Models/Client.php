@@ -109,6 +109,8 @@ class Client extends Model
     public function careTasks(): HasMany { return $this->hasMany(CareTask::class); }
     public function credentials(): HasMany { return $this->hasMany(ClientCredential::class); }
     public function wpSite(): HasOne { return $this->hasOne(WpSite::class); }
+    public function siteMonitor(): HasOne { return $this->hasOne(SiteMonitor::class); }
+    public function siteAudits(): HasMany { return $this->hasMany(SiteAudit::class); }
     public function wpEvents(): HasMany { return $this->hasMany(WpEvent::class); }
 
     public function latestAudit(): HasOne

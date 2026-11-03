@@ -25,6 +25,7 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                 ...(props.admin
                     ? [{ href: `${base}/credentials`, label: `Dane dostępowe${client.credentials_count ? ` (${client.credentials_count})` : ''}` }]
                     : []),
+                { href: `${base}/site`, label: `Strona${client.site?.status === 'down' ? ' ⚠' : ''}` },
                 { href: `${base}/wordpress`, label: `WordPress${client.wp?.alerts ? ` (${client.wp.alerts})` : ''}` },
                 { href: `${base}/reports`, label: 'Raporty' },
             ],
@@ -138,6 +139,19 @@ export default function ClientLayout({ client, title, children }: { client: Clie
                         </div>
                     ))}
                 </nav>
+
+                {client.site?.status === 'down' && path !== `${base}/site` && (
+                    <Link
+                        href={`${base}/site`}
+                        className="flex items-center gap-2 rounded-lg border border-[#d03b3b]/50 bg-[#d03b3b]/10 px-4 py-2.5 text-sm hover:bg-[#d03b3b]/15"
+                    >
+                        <ShieldAlert className="size-4 shrink-0 text-[#b42f2f] dark:text-[#f08080]" />
+                        <span>
+                            <strong>Strona nie działa</strong> – monitoring nie dostaje odpowiedzi.
+                        </span>
+                        <span className="ml-auto font-medium underline-offset-2 hover:underline">Szczegóły →</span>
+                    </Link>
+                )}
 
                 {client.wp && client.wp.alerts > 0 && path !== `${base}/wordpress` && (
                     <Link

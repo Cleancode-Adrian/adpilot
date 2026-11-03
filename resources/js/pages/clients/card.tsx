@@ -232,6 +232,43 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                         </ul>
                     </Section>
 
+                    <Section
+                        title="Strona"
+                        actions={
+                            <Button variant="ghost" size="sm" asChild>
+                                <Link href={`${base}/site`}>Szczegóły →</Link>
+                            </Button>
+                        }
+                    >
+                        <ul className="grid gap-1.5 text-sm">
+                            <li className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">Dostępność</span>
+                                <span className="font-medium">
+                                    {client.site.status === 'up'
+                                        ? '✓ działa'
+                                        : client.site.status === 'down'
+                                          ? '✗ nie działa'
+                                          : client.site.status === 'unknown'
+                                            ? 'pierwszy pomiar…'
+                                            : 'monitoring wyłączony'}
+                                    {client.site.last_response_ms ? ` · ${client.site.last_response_ms} ms` : ''}
+                                </span>
+                            </li>
+                            <li className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">Certyfikat SSL</span>
+                                <span className="font-medium">
+                                    {client.site.ssl_days === null ? '–' : client.site.ssl_days < 0 ? 'wygasł' : `${client.site.ssl_days} dni`}
+                                </span>
+                            </li>
+                            <li className="flex justify-between gap-2">
+                                <span className="text-muted-foreground">Audyt SEO</span>
+                                <span className="font-medium">
+                                    {client.site.audit_score === null ? 'nie było' : `${client.site.audit_score}/100`}
+                                </span>
+                            </li>
+                        </ul>
+                    </Section>
+
                     <Section title="Usługi">
                         <div className="grid gap-3 text-sm">
                             <div className="flex items-center justify-between gap-2">

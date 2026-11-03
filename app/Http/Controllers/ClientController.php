@@ -30,6 +30,8 @@ class ClientController extends Controller
                 'open_count' => $c->has_ads ? $c->open_count : 0,
                 'care' => $c->has_care || $c->has_general ? $planner->summary($c) : null,
                 'wp_alerts' => $c->wpEvents()->alerts()->count(),
+                'site_down' => $c->siteMonitor?->enabled && $c->siteMonitor->status === 'down',
+                'ssl_days' => $c->siteMonitor?->sslDaysLeft(),
                 'wp_connected' => $c->wpSite?->status === 'connected',
             ]);
 
@@ -177,6 +179,12 @@ class ClientController extends Controller
             'meta_configured' => MetaConnector::configured(),
             'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(\App\Services\Care\CarePlanner::class)->summary($client) : null,
             'credentials_count' => $client->credentials()->count(),
+            'site' => ($mon = $client->siteMonitor) ? [
+                'status' => $mon->enabled ? $mon->status : 'off',
+                'ssl_days' => $mon->sslDaysLeft(),
+                'last_response_ms' => $mon->last_response_ms,
+                'audit_score' => $client->siteAudits()->where('status', 'done')->latest('id')->value('score'),
+            ] : ['status' => null, 'ssl_days' => null, 'last_response_ms' => null, 'audit_score' => $client->siteAudits()->where('status', 'done')->latest('id')->value('score')],
             'wp' => ($wp = $client->wpSite) ? [
                 'status' => $wp->status,
                 'alerts' => $client->wpEvents()->alerts()->count(),

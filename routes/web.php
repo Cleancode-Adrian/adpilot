@@ -8,6 +8,7 @@ use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\RecommendationController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\WordPressController;
 use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,8 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'clients.index' : '
 // Publiczny raport dla klienta (link z tokenem, bez logowania)
 Route::get('r/{token}/{report}', [ReportController::class, 'public'])->name('public.report');
 Route::get('r/{token}/{report}/pdf', [ReportController::class, 'pdf'])->name('public.report.pdf');
+Route::get('a/{token}/{audit}', [SiteController::class, 'public'])->name('public.site-audit');
+Route::get('a/{token}/{audit}/pdf', [SiteController::class, 'pdf'])->name('public.site-audit.pdf');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -58,6 +61,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('clients/{client}/care/preset', [CareController::class, 'applyPreset'])->name('care.preset');
     Route::patch('care/templates/{template}', [CareController::class, 'updateTemplate'])->name('care.templates.update');
     Route::delete('care/templates/{template}', [CareController::class, 'destroyTemplate'])->name('care.templates.destroy');
+
+    // Strona: dostępność, SSL, audyt SEO/techniczny
+    Route::get('clients/{client}/site', [SiteController::class, 'index'])->name('clients.site');
+    Route::post('clients/{client}/site/audit', [SiteController::class, 'runAudit'])->middleware('throttle:10,1')->name('clients.site.audit');
+    Route::post('clients/{client}/site/monitor', [SiteController::class, 'updateMonitor'])->name('clients.site.monitor');
+    Route::post('clients/{client}/site/check', [SiteController::class, 'checkNow'])->middleware('throttle:10,1')->name('clients.site.check');
 
     // WordPress (wtyczka CC Connector)
     Route::get('clients/{client}/wordpress', [WordPressController::class, 'index'])->name('clients.wordpress');

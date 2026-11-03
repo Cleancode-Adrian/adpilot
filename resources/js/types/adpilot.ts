@@ -41,6 +41,7 @@ export interface ClientProps {
     care: CareSummary | null;
     credentials_count: number;
     wp: { status: string; alerts: number; critical: number; updates: number } | null;
+    site: { status: 'up' | 'down' | 'unknown' | 'off' | null; ssl_days: number | null; last_response_ms: number | null; audit_score: number | null };
     panel: { id: number; username: string | null; url: string | null; has_secret: boolean } | null;
 }
 

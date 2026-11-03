@@ -8,6 +8,13 @@
 @endforeach
 
 @endif
+@if(count($sites ?? []))
+## 🌐 Strony klientów
+@foreach($sites as $s)
+- **[{{ $s['name'] }}]({{ route('clients.site', $s['id']) }})** – {{ $s['text'] }}
+@endforeach
+
+@endif
 @if(count($wp ?? []))
 ## 🛡 WordPress – do sprawdzenia
 @foreach($wp as $c)
