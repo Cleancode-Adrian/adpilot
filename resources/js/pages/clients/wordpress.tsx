@@ -146,7 +146,29 @@ const DETAIL_LABELS: Record<string, string> = {
     last_login_tried: 'Ostatni login próby',
 };
 
-function EventRow({ e, hideAcknowledged }: { e: WpEvent; hideAcknowledged: boolean }) {
+/**
+ * Do czego należy plik: „motyw Definitio (folder starter, aktywny)”, „wtyczka WooCommerce”, „rdzeń WordPressa”…
+ * Nazwa folderu na serwerze często różni się od nazwy motywu widocznej w kokpicie.
+ */
+function componentOf(path: string, report: Report | null): string {
+    const theme = path.match(/wp-content\/themes\/([^/]+)\//);
+    if (theme) {
+        const t = report?.themes.find((x) => x.slug === theme[1]);
+        return t ? `motyw „${t.name}” (folder ${t.slug}, ${t.active ? 'aktywny' : 'nieaktywny'})` : `motyw w folderze ${theme[1]}`;
+    }
+    const plugin = path.match(/wp-content\/plugins\/([^/]+)/);
+    if (plugin) {
+        const p = report?.plugins.find((x) => x.file.startsWith(`${plugin[1]}/`) || x.file === plugin[1]);
+        return p ? `wtyczka „${p.name}” (${p.active ? 'aktywna' : 'nieaktywna'})` : `wtyczka w folderze ${plugin[1]}`;
+    }
+    if (path.includes('wp-content/mu-plugins/')) return 'wtyczki obowiązkowe (mu-plugins)';
+    if (path.includes('wp-content/uploads/')) return 'katalog z plikami (uploads)';
+    if (/(^|\/)(wp-config\.php|\.htaccess)$/.test(path)) return 'konfiguracja serwera';
+    if (/^(wp-admin|wp-includes)\//.test(path) || !path.includes('/')) return 'rdzeń WordPressa';
+    return 'inne';
+}
+
+function EventRow({ e, hideAcknowledged, report }: { e: WpEvent; hideAcknowledged: boolean; report: Report | null }) {
     const [open, setOpen] = useState(false);
     const [acked, setAcked] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -211,16 +233,28 @@ function EventRow({ e, hideAcknowledged }: { e: WpEvent; hideAcknowledged: boole
                         </dl>
                     )}
                     {files.length > 0 && (
-                        <ul className="bg-muted max-h-64 overflow-auto rounded-md p-2 font-mono">
-                            {files.map(({ k, f }) => (
-                                <li key={k + f} className="break-all">
-                                    <span className="text-muted-foreground">
-                                        {{ files: '', changed: 'zmieniony: ', added: 'nowy: ', removed: 'usunięty: ' }[k]}
-                                    </span>
-                                    {f}
-                                </li>
+                        <div className="bg-muted max-h-72 space-y-2 overflow-auto rounded-md p-2">
+                            {Object.entries(
+                                files.reduce<Record<string, typeof files>>((acc, x) => {
+                                    (acc[componentOf(x.f, report)] ??= []).push(x);
+                                    return acc;
+                                }, {}),
+                            ).map(([component, list]) => (
+                                <div key={component}>
+                                    <div className="font-sans text-xs font-semibold">{component}</div>
+                                    <ul className="font-mono">
+                                        {list.map(({ k, f }) => (
+                                            <li key={k + f} className="break-all">
+                                                <span className="text-muted-foreground">
+                                                    {{ files: '', changed: 'zmieniony: ', added: 'nowy: ', removed: 'usunięty: ' }[k]}
+                                                </span>
+                                                {f}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             ))}
-                        </ul>
+                        </div>
                     )}
                 </div>
             )}
@@ -535,7 +569,7 @@ export default function WordPress({
                         ) : (
                             <ul className="grid gap-2">
                                 {events.map((e) => (
-                                    <EventRow key={e.id} e={e} hideAcknowledged={eventFilter === 'alerts'} />
+                                    <EventRow key={e.id} e={e} hideAcknowledged={eventFilter === 'alerts'} report={r} />
                                 ))}
                             </ul>
                         )}

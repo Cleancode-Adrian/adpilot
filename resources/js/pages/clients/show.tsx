@@ -1,3 +1,4 @@
+import { type Behavior, BehaviorSection } from '@/components/adpilot/behavior';
 import { DailyTable, LeadsChart, RevenueChart, SpendChart } from '@/components/adpilot/charts';
 import { type Funnel, MetaFunnel, type Placement, PlacementTable } from '@/components/adpilot/meta-funnel';
 import { type Today, TodayStrip } from '@/components/adpilot/today-strip';
@@ -154,7 +155,9 @@ export default function ClientShow({
     funnel,
     placements,
     today,
-}: Props & { funnel: Funnel | null; placements: Placement[]; today: Today | null }) {
+    behavior,
+    clarityDetected,
+}: Props & { funnel: Funnel | null; placements: Placement[]; today: Today | null; behavior: Behavior | null; clarityDetected: boolean }) {
     const [platform, setPlatform] = useState<'all' | 'google_ads' | 'meta_ads'>('all');
     const cur = client.currency;
     const a = kpis.ads;
@@ -273,6 +276,13 @@ export default function ClientShow({
                             <MetaFunnel funnel={funnel} currency={cur} />
                         </Section>
                     )}
+
+                    <Section
+                        title="Co robią osoby z reklam"
+                        description="Z Google Analytics 4: na którą stronę weszli, jak długo byli, jak daleko przewinęli, czy zaczęli wypełniać formularz."
+                    >
+                        <BehaviorSection behavior={behavior} clarityDetected={clarityDetected} />
+                    </Section>
 
                     {placements.length > 0 && platform !== 'google_ads' && (
                         <Section

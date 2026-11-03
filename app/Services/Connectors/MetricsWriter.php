@@ -110,6 +110,37 @@ class MetricsWriter
         );
     }
 
+    /** Grupa źródła ruchu: meta | google_ads | null (pozostałe nas tu nie interesują). */
+    public static function sourceGroup(string $sourceMedium): ?string
+    {
+        if (preg_match(\App\Services\Analysis\Metrics::META_SOURCE_REGEX, $sourceMedium)) {
+            return 'meta';
+        }
+        [$source, $medium] = array_map('trim', explode('/', strtolower($sourceMedium), 2) + [1 => '']);
+
+        return in_array($source, ['google', 'adwords', 'youtube'], true) && in_array($medium, ['cpc', 'ppc', 'paid', 'paidsearch', 'display'], true) ? 'google_ads' : null;
+    }
+
+    /**
+     * Zachowanie ruchu z reklam – podmiana całego okresu (dane GA4 dla ostatnich dni jeszcze się zmieniają).
+     * $rows: [date, group, kind, item, sessions, engaged_sessions, engagement_seconds, views, key_events]
+     * $events: [date, group, event_name, count]
+     */
+    public function replaceBehavior(string $from, string $to, array $rows, array $events): void
+    {
+        $db = \Illuminate\Support\Facades\DB::connection();
+        $db->transaction(function () use ($db, $from, $to, $rows, $events) {
+            $db->table('analytics_behavior')->where('client_id', $this->client->id)->whereBetween('date', [$from, $to])->delete();
+            $db->table('analytics_source_events')->where('client_id', $this->client->id)->whereBetween('date', [$from, $to])->delete();
+            foreach (array_chunk($rows, 500) as $chunk) {
+                $db->table('analytics_behavior')->insert(array_map(fn ($r) => ['client_id' => $this->client->id] + $r, $chunk));
+            }
+            foreach (array_chunk($events, 500) as $chunk) {
+                $db->table('analytics_source_events')->insert(array_map(fn ($r) => ['client_id' => $this->client->id] + $r, $chunk));
+            }
+        });
+    }
+
     public function event(string $date, string $name, int $count): void
     {
         \Illuminate\Support\Facades\DB::table('analytics_events')->updateOrInsert(

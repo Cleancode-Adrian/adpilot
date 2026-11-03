@@ -127,6 +127,8 @@ class ClientController extends Controller
             'channels' => $m->channels($from, $to),
             'searchTerms' => $client->searchTerms()->with('campaign:id,name')->orderByDesc('cost')->limit(50)->get(),
             'funnel' => $m->funnel($from, $to),
+            'behavior' => $m->behavior($from, $to),
+            'clarityDetected' => in_array('Microsoft Clarity', (array) ($client->audits()->where('status', 'done')->latest()->first()?->results['detected']['others'] ?? []), true),
             'today' => ($today = $m->totals(now()->startOfDay(), now()->startOfDay()))['impressions'] > 0 ? [
                 ...$today,
                 'meta' => $m->totals(now()->startOfDay(), now()->startOfDay(), 'meta_ads'),

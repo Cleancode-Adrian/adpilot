@@ -92,6 +92,54 @@ class Metrics
     }
 
     /**
+     * Co robią osoby z reklam (GA4): strony wejścia, reklamy (utm_content), zaangażowanie, zdarzenia.
+     * @return array<string, array>|null  meta / google_ads → dane; null = brak danych
+     */
+    public function behavior(CarbonInterface $from, CarbonInterface $to): ?array
+    {
+        $range = [$from->toDateString(), $to->toDateString()];
+        $rows = DB::table('analytics_behavior')->where('client_id', $this->client->id)->whereBetween('date', $range)
+            ->groupBy('source_group', 'kind', 'item')
+            ->selectRaw('source_group, kind, item, SUM(sessions) as sessions, SUM(engaged_sessions) as engaged, SUM(engagement_seconds) as seconds, SUM(views) as views, SUM(key_events) as key_events')
+            ->get();
+        if ($rows->isEmpty()) {
+            return null;
+        }
+        $events = DB::table('analytics_source_events')->where('client_id', $this->client->id)->whereBetween('date', $range)
+            ->groupBy('source_group', 'event_name')->selectRaw('source_group, event_name, SUM(count) as count')->get();
+
+        $fmt = fn ($r) => [
+            'item' => $r->item,
+            'sessions' => (int) $r->sessions,
+            'engaged_rate' => $r->sessions ? (int) round($r->engaged / $r->sessions * 100) : 0,
+            'avg_seconds' => $r->sessions ? (int) round($r->seconds / $r->sessions) : 0,
+            'views_per_session' => $r->sessions ? round($r->views / $r->sessions, 1) : 0,
+            'key_events' => round((float) $r->key_events, 1),
+        ];
+
+        $out = [];
+        foreach ($rows->groupBy('source_group') as $group => $g) {
+            $landing = $g->where('kind', 'landing');
+            $sessions = (int) $landing->sum('sessions');
+            $ev = $events->where('source_group', $group)->pluck('count', 'event_name')->map(fn ($v) => (int) $v);
+            $out[$group] = [
+                'totals' => [
+                    'sessions' => $sessions,
+                    'engaged_rate' => $sessions ? (int) round($landing->sum('engaged') / $sessions * 100) : 0,
+                    'avg_seconds' => $sessions ? (int) round($landing->sum('seconds') / $sessions) : 0,
+                    'views_per_session' => $sessions ? round($landing->sum('views') / $sessions, 1) : 0,
+                    'key_events' => round((float) $landing->sum('key_events'), 1),
+                ],
+                'landing' => $landing->sortByDesc('sessions')->take(15)->map($fmt)->values()->all(),
+                'ads' => $g->where('kind', 'ad')->sortByDesc('sessions')->take(15)->map($fmt)->values()->all(),
+                'events' => $ev->all(),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Lejek Meta: wyświetlenia → kliknięcia linku → wejścia na stronę (LPV, Meta) → sesje z Meta w GA4 → wyniki.
      * Każdy krok z odsetkiem przejścia i normą (poniżej normy = problem do sprawdzenia).
      */
