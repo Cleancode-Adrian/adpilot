@@ -92,6 +92,24 @@ class MetricsWriter
         );
     }
 
+    /** Umiejscowienia Meta (dzień × kampania × platforma × pozycja). */
+    public function placement(int $campaignId, string $date, string $platform, string $position, array $m): void
+    {
+        \Illuminate\Support\Facades\DB::table('placement_metrics')->updateOrInsert(
+            ['campaign_id' => $campaignId, 'date' => $date, 'publisher_platform' => $platform, 'platform_position' => $position],
+            ['client_id' => $this->client->id] + $this->clean($m),
+        );
+    }
+
+    /** Sesje GA4 wg źródła / medium. */
+    public function source(string $date, string $sourceMedium, array $m): void
+    {
+        \Illuminate\Support\Facades\DB::table('analytics_sources')->updateOrInsert(
+            ['client_id' => $this->client->id, 'date' => $date, 'source_medium' => mb_substr($sourceMedium, 0, 190)],
+            $this->clean($m),
+        );
+    }
+
     public function event(string $date, string $name, int $count): void
     {
         \Illuminate\Support\Facades\DB::table('analytics_events')->updateOrInsert(

@@ -39,6 +39,16 @@ class RuleContext
         return $this->cache["a$days.$offset"] ??= $this->metrics->ads(...$this->range($days, $offset));
     }
 
+    public function placements(int $days = 14): Collection
+    {
+        return $this->cache["p$days"] ??= $this->metrics->placements(...$this->range($days));
+    }
+
+    public function funnel(int $days = 14): ?array
+    {
+        return array_key_exists("f$days", $this->cache) ? $this->cache["f$days"] : ($this->cache["f$days"] = $this->metrics->funnel(...$this->range($days)));
+    }
+
     public function searchTerms(): Collection
     {
         return $this->cache['terms'] ??= $this->client->searchTerms()->with('campaign:id,name')->get();

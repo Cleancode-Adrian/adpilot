@@ -1,4 +1,5 @@
 import { DailyTable, LeadsChart, RevenueChart, SpendChart } from '@/components/adpilot/charts';
+import { type Funnel, MetaFunnel, type Placement, PlacementTable } from '@/components/adpilot/meta-funnel';
 import { EmptyState, KpiTile, NativeSelect, PlatformDot, Section } from '@/components/adpilot/ui';
 import ClientLayout from '@/layouts/client-layout';
 import { money, num, pct, platformName, roas } from '@/lib/format';
@@ -140,7 +141,18 @@ function StatTable({
     );
 }
 
-export default function ClientShow({ client, days, kpis, daily, campaigns, ads, channels, searchTerms }: Props) {
+export default function ClientShow({
+    client,
+    days,
+    kpis,
+    daily,
+    campaigns,
+    ads,
+    channels,
+    searchTerms,
+    funnel,
+    placements,
+}: Props & { funnel: Funnel | null; placements: Placement[] }) {
     const [platform, setPlatform] = useState<'all' | 'google_ads' | 'meta_ads'>('all');
     const cur = client.currency;
     const a = kpis.ads;
@@ -248,6 +260,24 @@ export default function ClientShow({ client, days, kpis, daily, campaigns, ads, 
                         )}
                     </div>
                     <DailyTable data={daily} currency={cur} />
+
+                    {funnel && platform !== 'google_ads' && (
+                        <Section
+                            title="Lejek Meta – gdzie ginie ruch"
+                            description="Od wyświetlenia reklamy do wyniku. Najedź na krok, aby zobaczyć, co oznacza."
+                        >
+                            <MetaFunnel funnel={funnel} currency={cur} />
+                        </Section>
+                    )}
+
+                    {placements.length > 0 && platform !== 'google_ads' && (
+                        <Section
+                            title="Umiejscowienia Meta"
+                            description="Facebook, Instagram, Audience Network… – gdzie są kliknięcia i czy kończą się wejściem na stronę"
+                        >
+                            <PlacementTable rows={placements} currency={cur} />
+                        </Section>
+                    )}
 
                     <Section title="Kampanie" description="Kliknij nagłówek kolumny, aby posortować">
                         {filt(campaigns).length ? (

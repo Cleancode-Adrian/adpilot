@@ -33,6 +33,8 @@ class RuleEngine
             Rules\TrackingAuditIssues::class,
             Rules\IntegrationHealth::class,
             Rules\LowLandingConversion::class,
+            Rules\MetaFunnelLeaks::class,
+            Rules\MetaAccountHealth::class,
         ];
     }
 

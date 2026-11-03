@@ -76,6 +76,30 @@ class Ga4Connector
         } while (count($rows) === 10000);
 
         $this->syncEvents($i, $w, $propertyId, $from, $to);
+        $this->syncSources($i, $w, $propertyId, $from, $to);
+    }
+
+    /** Sesje wg źródła / medium (np. facebook / paid) – do lejka „kliknięcia w reklamie → sesje w GA4”. */
+    private function syncSources(Integration $i, MetricsWriter $w, string $propertyId, string $from, string $to): void
+    {
+        $res = Http::withToken($this->auth->token($i))->timeout(120)
+            ->post("https://analyticsdata.googleapis.com/v1beta/properties/{$propertyId}:runReport", [
+                'dateRanges' => [['startDate' => $from, 'endDate' => $to]],
+                'dimensions' => [['name' => 'date'], ['name' => 'sessionSourceMedium']],
+                'metrics' => [['name' => 'sessions'], ['name' => 'engagedSessions'], ['name' => 'keyEvents']],
+                'limit' => 10000,
+            ]);
+        if ($res->failed()) {
+            return; // dodatkowy raport – nie blokuje synchronizacji
+        }
+        foreach ($res->json('rows', []) as $row) {
+            $m = array_column($row['metricValues'], 'value');
+            $w->source(Carbon::createFromFormat('Ymd', $row['dimensionValues'][0]['value'])->toDateString(), $row['dimensionValues'][1]['value'] ?: '(not set)', [
+                'sessions' => (int) $m[0],
+                'engaged_sessions' => (int) $m[1],
+                'key_events' => (float) ($m[2] ?? 0),
+            ]);
+        }
     }
 
     /** Zdarzenia leadowe (formularze, rejestracje, telefony) dzień po dniu. */

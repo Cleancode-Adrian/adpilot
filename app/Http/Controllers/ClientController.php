@@ -124,6 +124,8 @@ class ClientController extends Controller
             'ads' => $m->ads($from, $to)->take(100)->values(),
             'channels' => $m->channels($from, $to),
             'searchTerms' => $client->searchTerms()->with('campaign:id,name')->orderByDesc('cost')->limit(50)->get(),
+            'funnel' => $m->funnel($from, $to),
+            'placements' => $m->placements($from, $to)->filter(fn ($p) => $p['impressions'] > 0)->values(),
         ]);
     }
 

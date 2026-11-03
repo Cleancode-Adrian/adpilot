@@ -40,6 +40,18 @@ class CarePlanner
                 ['Wersja PHP na hostingu', 'Sprawdź, czy wersja PHP jest wspierana; zaplanuj podniesienie, jeśli zbliża się koniec wsparcia.', 'semiannual', 15],
             ],
         ],
+        'ads_tracking' => [
+            'label' => 'Reklamy – kontrola konta i pomiaru',
+            'items' => [
+                ['Test zdarzenia Lead / zakupu', 'Wyślij testowy formularz (albo zamówienie) i sprawdź: Meta Pixel Helper / Menedżer zdarzeń → Testuj zdarzenia oraz GA4 → DebugView. Zdarzenie musi dojść do obu.', 'monthly', 5],
+                ['Linki reklam – parametry UTM', 'Każda aktywna reklama ma utm_source / utm_medium / utm_campaign (np. facebook / paid). Bez tego GA4 pokaże ruch jako „direct”.', 'monthly', 5],
+                ['Meta: zestaw danych połączony z domeną', 'Menedżer zdarzeń → zestaw danych (piksel) → Ustawienia → połączone konta reklamowe i domena. Ostrzeżenia przy zestawach reklam panel pokazuje sam.', 'monthly', 10],
+                ['Meta: weryfikacja reklamodawcy i płatności', 'Ustawienia firmy → Centrum bezpieczeństwa: weryfikacja reklamodawcy, 2FA administratorów, metoda płatności konta reklamowego.', 'quarterly', 10],
+                ['Baner cookies (CMP) – plan i odsetek zgód', 'Sprawdź, czy kończy się okres próbny / abonament (Cookiebot, CookieYes…) i odsetek zgód. Spadek poniżej ~70% = mniej danych w GA4 i Meta.', 'monthly', 15],
+                ['Umiejscowienia Meta', 'Wyniki reklam → Umiejscowienia: czy nie wróciły kliknięcia z Audience Network bez wejść na stronę (Meta potrafi je włączyć w nowych kampaniach Advantage+).', 'monthly', 15],
+                ['Conversions API (zdarzenia z serwera)', 'Czy zdarzenia z serwera dochodzą do Meta i deduplikują się z pikselem (ten sam event_id). Menedżer zdarzeń → Przegląd → „Wiele źródeł”.', 'quarterly', 20],
+            ],
+        ],
         'basic' => [
             'label' => 'Podstawowa opieka',
             'items' => [

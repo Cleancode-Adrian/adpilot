@@ -79,13 +79,33 @@ class MetaConnector
             throw new RuntimeException('Nie wybrano konta reklamowego Meta.');
         }
 
-        // Kampanie (status, budżet)
-        foreach ($this->paginate($i, "$act/campaigns", ['fields' => 'id,name,effective_status,objective,daily_budget', 'limit' => 200]) as $c) {
+        // Ostrzeżenia Meta z zestawów reklam (np. „zestaw danych nie jest połączony z witryną”) – przypinamy do kampanii
+        $adsetIssues = [];
+        $destinations = [];
+        try {
+            foreach ($this->paginate($i, "$act/adsets", ['fields' => 'id,name,campaign_id,effective_status,issues_info,destination_type', 'limit' => 200]) as $s) {
+                if (! empty($s['destination_type'])) {
+                    $destinations[$s['campaign_id']][] = $s['destination_type'];
+                }
+                foreach ($this->issues($s['issues_info'] ?? [], 'zestaw „'.($s['name'] ?? $s['id']).'”') as $issue) {
+                    $adsetIssues[$s['campaign_id']][] = $issue;
+                }
+            }
+        } catch (RuntimeException) {
+            // brak uprawnień do zestawów – nie blokuje synchronizacji
+        }
+
+        // Kampanie (status, budżet, ostrzeżenia)
+        foreach ($this->paginate($i, "$act/campaigns", ['fields' => 'id,name,effective_status,objective,daily_budget,issues_info', 'limit' => 200]) as $c) {
+            $issues = array_merge($this->issues($c['issues_info'] ?? [], 'kampania'), $adsetIssues[$c['id']] ?? []);
             $w->campaign(self::PLATFORM, $c['id'], [
                 'name' => $c['name'],
                 'status' => $c['effective_status'] ?? null,
                 'channel_type' => $c['objective'] ?? null,
                 'daily_budget' => isset($c['daily_budget']) ? $c['daily_budget'] / 100 : null,
+                'issues' => $issues ?: null,
+                // kampania mieszana (strona + formularz) liczona jako „strona”
+                'destination' => isset($destinations[$c['id']]) ? (in_array('WEBSITE', $destinations[$c['id']], true) ? 'WEBSITE' : $destinations[$c['id']][0]) : null,
             ]);
         }
 
@@ -94,7 +114,7 @@ class MetaConnector
             'level' => 'ad',
             'time_increment' => 1,
             'time_range' => json_encode(['since' => $from, 'until' => $to]),
-            'fields' => 'campaign_id,campaign_name,ad_id,ad_name,impressions,clicks,spend,reach,frequency,actions,action_values',
+            'fields' => 'campaign_id,campaign_name,ad_id,ad_name,impressions,clicks,inline_link_clicks,spend,reach,frequency,actions,action_values',
             'limit' => 500,
         ]);
 
@@ -108,6 +128,8 @@ class MetaConnector
             $metrics = [
                 'impressions' => (int) ($row['impressions'] ?? 0),
                 'clicks' => (int) ($row['clicks'] ?? 0),
+                'link_clicks' => (int) ($row['inline_link_clicks'] ?? 0),
+                'landing_page_views' => (int) $this->action($row['actions'] ?? [], 'landing_page_view'),
                 'cost' => (float) ($row['spend'] ?? 0),
                 'conversions' => $this->results($row['actions'] ?? [], $goal),
                 'conversion_value' => $this->purchase($row['action_values'] ?? []),
@@ -116,8 +138,8 @@ class MetaConnector
             $w->adMetric($ad->id, $row['date_start'], $metrics);
 
             $agg = &$campaignDays[$campaignId][$row['date_start']];
-            $agg ??= ['impressions' => 0, 'clicks' => 0, 'cost' => 0, 'conversions' => 0, 'conversion_value' => 0, 'reach' => 0];
-            foreach (['impressions', 'clicks', 'cost', 'conversions', 'conversion_value'] as $k) {
+            $agg ??= ['impressions' => 0, 'clicks' => 0, 'link_clicks' => 0, 'landing_page_views' => 0, 'cost' => 0, 'conversions' => 0, 'conversion_value' => 0, 'reach' => 0];
+            foreach (['impressions', 'clicks', 'link_clicks', 'landing_page_views', 'cost', 'conversions', 'conversion_value'] as $k) {
                 $agg[$k] += $metrics[$k];
             }
             $agg['reach'] += (int) ($row['reach'] ?? 0); // przybliżenie – reach nie sumuje się idealnie
@@ -130,6 +152,79 @@ class MetaConnector
                 $w->campaignMetric($campaignId, $date, $m);
             }
         }
+
+        $this->syncPlacements($i, $w, $act, $from, $to, $goal);
+        $this->syncPixels($i, $act);
+    }
+
+    /** Wyniki wg umiejscowień – tu widać np. kliknięcia z Audience Network bez wejść na stronę. */
+    private function syncPlacements(Integration $i, MetricsWriter $w, string $act, string $from, string $to, string $goal): void
+    {
+        try {
+            $rows = $this->paginate($i, "$act/insights", [
+                'level' => 'campaign',
+                'time_increment' => 1,
+                'time_range' => json_encode(['since' => $from, 'until' => $to]),
+                'breakdowns' => 'publisher_platform,platform_position',
+                'fields' => 'campaign_id,campaign_name,impressions,clicks,inline_link_clicks,spend,actions',
+                'limit' => 500,
+            ]);
+        } catch (RuntimeException) {
+            return; // podział niedostępny dla konta – nie blokuje reszty
+        }
+        foreach ($rows as $row) {
+            $campaignId = $w->campaignId(self::PLATFORM, $row['campaign_id']);
+            if (! $campaignId) {
+                continue;
+            }
+            $w->placement($campaignId, $row['date_start'], (string) ($row['publisher_platform'] ?? 'unknown'), (string) ($row['platform_position'] ?? 'unknown'), [
+                'impressions' => (int) ($row['impressions'] ?? 0),
+                'clicks' => (int) ($row['clicks'] ?? 0),
+                'link_clicks' => (int) ($row['inline_link_clicks'] ?? 0),
+                'landing_page_views' => (int) $this->action($row['actions'] ?? [], 'landing_page_view'),
+                'cost' => (float) ($row['spend'] ?? 0),
+                'conversions' => $this->results($row['actions'] ?? [], $goal),
+            ]);
+        }
+    }
+
+    /** Piksele konta: kiedy ostatnio wysłały zdarzenie (piksel „milczy” = brak pomiaru konwersji). */
+    private function syncPixels(Integration $i, string $act): void
+    {
+        try {
+            $pixels = $this->paginate($i, "$act/adspixels", ['fields' => 'id,name,last_fired_time,is_unavailable', 'limit' => 50]);
+        } catch (RuntimeException) {
+            return;
+        }
+        $i->settings = array_merge($i->settings ?? [], ['pixels' => array_map(fn ($p) => [
+            'id' => $p['id'],
+            'name' => $p['name'] ?? $p['id'],
+            'last_fired_time' => $p['last_fired_time'] ?? null,
+            'unavailable' => (bool) ($p['is_unavailable'] ?? false),
+        ], $pixels)]);
+        $i->save();
+    }
+
+    /** issues_info Meta → [{where, summary, message, level}] */
+    private function issues(array $issues, string $where): array
+    {
+        return array_values(array_filter(array_map(fn ($x) => is_array($x) ? [
+            'where' => $where,
+            'summary' => (string) ($x['error_summary'] ?? $x['error_message'] ?? 'Ostrzeżenie Meta'),
+            'message' => (string) ($x['error_message'] ?? ''),
+            'level' => (string) ($x['level'] ?? ''),
+        ] : null, $issues)));
+    }
+
+    private function action(array $actions, string $type): float
+    {
+        foreach ($actions as $a) {
+            if (($a['action_type'] ?? null) === $type) {
+                return (float) $a['value'];
+            }
+        }
+
+        return 0.0;
     }
 
     /** Wynik wg celu klienta: zakupy, leady (formularz/rejestracja/kontakt) lub oba. */

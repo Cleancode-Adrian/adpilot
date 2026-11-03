@@ -79,10 +79,12 @@ class DemoDataGenerator
         foreach ($campaigns as $key => $def) {
             $models[$key] = $w->campaign($def['platform'], 'demo-'.$key, [
                 'name' => $def['name'], 'status' => $def['status'] ?? 'ENABLED', 'channel_type' => $def['type'], 'daily_budget' => $def['budget'],
+                'destination' => $def['platform'] === 'meta_ads' ? ($def['destination'] ?? 'WEBSITE') : null,
             ]);
         }
 
         $paid = [];
+        $metaLpv = [];
         for ($day = $start, $i = 0; $day->lte($end); $day = $day->addDay(), $i++) {
             $date = $day->toDateString();
             $weekday = [1 => 1.0, 2 => 1.05, 3 => 1.0, 4 => 0.95, 5 => 0.9, 6 => 0.85, 7 => 1.15][$day->dayOfWeekIso];
@@ -108,6 +110,11 @@ class DemoDataGenerator
                     $value = $conv * $def['aov'] * (1 + $this->noise(0.2));
 
                     $metrics = ['impressions' => $impr, 'clicks' => $clicks, 'cost' => $cost, 'conversions' => $conv, 'conversion_value' => $value, 'frequency' => $freq];
+                    if ($def['platform'] === 'meta_ads') {
+                        // kliknięcia w link ≈ 75% wszystkich kliknięć; wejścia na stronę – patrz umiejscowienia niżej
+                        $metrics['link_clicks'] = (int) round($clicks * 0.75);
+                        $metrics['landing_page_views'] = (int) round($metrics['link_clicks'] * 0.58);
+                    }
                     $adModel = $w->ad($def['platform'], "demo-$key-$adKey", $c->id, $ad['name'], 'ENABLED');
                     $w->adMetric($adModel->id, $date, $metrics);
 
@@ -119,7 +126,10 @@ class DemoDataGenerator
                     }
                 }
 
-                $w->campaignMetric($c->id, $date, [
+                $links = $def['platform'] === 'meta_ads' ? $this->demoPlacements($w, $c->id, $date, $daySum) : null;
+                $metaLpv[$date] = ($metaLpv[$date] ?? 0) + (($def['destination'] ?? 'WEBSITE') === 'WEBSITE' ? ($links['landing_page_views'] ?? 0) : 0);
+
+                $w->campaignMetric($c->id, $date, ($links ?? []) + [
                     'impressions' => $daySum['impressions'], 'clicks' => $daySum['clicks'], 'cost' => $daySum['cost'],
                     'conversions' => $daySum['conversions'], 'conversion_value' => $daySum['conversion_value'],
                     'reach' => $daySum['reach'] ?: null,
@@ -130,6 +140,11 @@ class DemoDataGenerator
                 $paid[$date][$def['ga_channel']]['clicks'] = ($paid[$date][$def['ga_channel']]['clicks'] ?? 0) + $daySum['clicks'];
                 $paid[$date][$def['ga_channel']]['conv'] = ($paid[$date][$def['ga_channel']]['conv'] ?? 0) + $daySum['conversions'] * ($def['platform'] === 'meta_ads' ? 0.55 : 0.85);
             }
+
+            // GA4 wg źródła: sesje z Meta ≈ 75% wejść zarejestrowanych przez Meta (część osób odmawia zgody na cookies)
+            $w->source($date, 'facebook / paid', ['sessions' => (int) round(($metaLpv[$date] ?? 0) * 0.75), 'engaged_sessions' => (int) round(($metaLpv[$date] ?? 0) * 0.45), 'key_events' => 0]);
+            $w->source($date, 'google / cpc', ['sessions' => (int) round(($paid[$date]['Paid Search']['clicks'] ?? 0) * 0.9), 'engaged_sessions' => 0, 'key_events' => 0]);
+            $w->source($date, '(direct) / (none)', ['sessions' => (int) round(40 * $weekday * $season), 'engaged_sessions' => 0, 'key_events' => 0]);
 
             $leads
                 ? $this->leadAnalyticsDay($w, $date, $weekday * $season, $paid[$date])
@@ -209,7 +224,7 @@ class DemoDataGenerator
                 'ads' => ['a' => ['name' => 'RSA – Pierwszy miesiąc gratis', 'share' => 0.6, 'cvr' => 1.3], 'b' => ['name' => 'RSA – Księgowa online', 'share' => 0.4, 'cvr' => 0.55]]],
             'l_service' => ['platform' => 'google_ads', 'name' => 'Search | Księgowość dla firm (usługi)', 'type' => 'SEARCH', 'budget' => 10, 'cost' => 10, 'cpc' => 2.6, 'ctr' => 5.8, 'cvr' => 4.2, 'aov' => 0, 'lost_is' => 0.12, 'ga_channel' => 'Paid Search',
                 'ads' => ['a' => ['name' => 'RSA – JDG od 199 zł', 'share' => 1]]],
-            'l_meta_form' => ['platform' => 'meta_ads', 'name' => 'Lead Ads | Formularz – darmowa wycena', 'type' => 'OUTCOME_LEADS', 'budget' => 10, 'cost' => 10, 'cpc' => 0.9, 'ctr' => 1.4, 'cvr' => 5.0, 'aov' => 0, 'ga_channel' => 'Paid Social',
+            'l_meta_form' => ['platform' => 'meta_ads', 'name' => 'Lead Ads | Formularz – darmowa wycena', 'type' => 'OUTCOME_LEADS', 'destination' => 'ON_AD', 'budget' => 10, 'cost' => 10, 'cpc' => 0.9, 'ctr' => 1.4, 'cvr' => 5.0, 'aov' => 0, 'ga_channel' => 'Paid Social',
                 'ads' => ['a' => ['name' => 'Wideo – właściciel biura (UGC)', 'share' => 0.55, 'cvr' => 1.3, 'fatigue' => true, 'freq' => 1.9], 'b' => ['name' => 'Grafika – „Nie trać czasu na papiery”', 'share' => 0.45, 'cvr' => 0.6]]],
             'l_meta_traffic' => ['platform' => 'meta_ads', 'name' => 'Ruch | Strona – kalkulator kosztów', 'type' => 'OUTCOME_TRAFFIC', 'budget' => 5, 'cost' => 5, 'cpc' => 0.45, 'ctr' => 1.9, 'cvr' => 0.6, 'aov' => 0, 'ga_channel' => 'Paid Social',
                 'ads' => ['a' => ['name' => 'Karuzela – 3 pakiety usług', 'share' => 1]]],
@@ -307,6 +322,37 @@ class DemoDataGenerator
             'm_interests' => ['platform' => 'meta_ads', 'name' => 'Prospecting | Zainteresowania – ogród', 'type' => 'OUTCOME_SALES', 'budget' => 150, 'cost' => 150, 'cpc' => 1.4, 'ctr' => 1.0, 'cvr' => 0.4, 'aov' => 540, 'ga_channel' => 'Paid Social',
                 'ads' => ['a' => ['name' => 'Grafika – rabat 15%', 'share' => 0.6], 'b' => ['name' => 'Wideo – aranżacje tarasu', 'share' => 0.4]]],
         ];
+    }
+
+    /**
+     * Umiejscowienia Meta dla dnia kampanii. Audience Network ma wysoki CTR i prawie zero wejść na stronę –
+     * tak jak w prawdziwych kontach (przypadkowe kliknięcia w aplikacjach / „wideo z nagrodą”).
+     */
+    private function demoPlacements(MetricsWriter $w, int $campaignId, string $date, array $day): array
+    {
+        $split = [
+            ['facebook', 'feed', 0.42, 1.0, 0.72], ['instagram', 'feed', 0.18, 0.8, 0.7], ['instagram', 'instagram_stories', 0.1, 0.6, 0.62],
+            ['facebook', 'facebook_reels', 0.1, 0.7, 0.6], ['audience_network', 'an_classic', 0.16, 3.2, 0.06], ['audience_network', 'rewarded_video', 0.04, 9.0, 0.0],
+        ];
+        $weight = array_sum(array_map(fn ($p) => $p[2] * $p[3], $split));
+        $links = (int) round($day['clicks'] * 0.75);
+        $sum = ['link_clicks' => 0, 'landing_page_views' => 0];
+        foreach ($split as [$platform, $position, $imprShare, $ctrMult, $lpvRate]) {
+            $l = (int) round($links * $imprShare * $ctrMult / $weight);
+            $lpv = (int) round($l * $lpvRate);
+            $w->placement($campaignId, $date, $platform, $position, [
+                'impressions' => (int) round($day['impressions'] * $imprShare),
+                'clicks' => (int) round($l * 1.3),
+                'link_clicks' => $l,
+                'landing_page_views' => $lpv,
+                'cost' => $day['cost'] * $imprShare,
+                'conversions' => $platform === 'audience_network' ? 0 : round($day['conversions'] * $imprShare / 0.8, 2),
+            ]);
+            $sum['link_clicks'] += $l;
+            $sum['landing_page_views'] += $lpv;
+        }
+
+        return $sum;
     }
 
     private function noise(float $amp): float

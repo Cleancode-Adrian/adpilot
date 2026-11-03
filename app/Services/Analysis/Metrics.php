@@ -32,7 +32,111 @@ class Metrics
         ]);
     }
 
-    private const SUMS = 'SUM(m.impressions) as impressions, SUM(m.clicks) as clicks, SUM(m.cost) as cost, SUM(m.conversions) as conversions, SUM(m.conversion_value) as conversion_value';
+    private const SUMS = 'SUM(m.impressions) as impressions, SUM(m.clicks) as clicks, SUM(m.link_clicks) as link_clicks, SUM(m.landing_page_views) as landing_page_views, SUM(m.cost) as cost, SUM(m.conversions) as conversions, SUM(m.conversion_value) as conversion_value';
+
+    /** Źródła GA4, które oznaczają ruch z Meta (UTM-y i odesłania z aplikacji Facebook/Instagram). */
+    public const META_SOURCE_REGEX = '/(^|[^a-z])(facebook|fb|instagram|ig|meta|threads|messenger)([^a-z]|$)|facebook\.com|instagram\.com/i';
+
+    private const PUBLISHERS = ['facebook' => 'Facebook', 'instagram' => 'Instagram', 'audience_network' => 'Audience Network', 'messenger' => 'Messenger', 'threads' => 'Threads'];
+
+    private const POSITIONS = [
+        'feed' => 'aktualności', 'marketplace' => 'Marketplace', 'video_feeds' => 'filmy', 'right_hand_column' => 'prawa kolumna',
+        'search' => 'wyniki wyszukiwania', 'instream_video' => 'filmy in-stream', 'facebook_reels' => 'Reels', 'facebook_reels_overlay' => 'nakładki w Reels',
+        'facebook_stories' => 'relacje', 'story' => 'relacje', 'instagram_stories' => 'relacje', 'instagram_reels' => 'Reels',
+        'instagram_explore' => 'Eksploruj', 'instagram_explore_grid_home' => 'Eksploruj (siatka)', 'profile_feed' => 'profil',
+        'instagram_profile_feed' => 'profil', 'an_classic' => 'natywna, baner, pełnoekranowa', 'rewarded_video' => 'wideo z nagrodą',
+        'messenger_inbox' => 'skrzynka odbiorcza', 'messenger_stories' => 'relacje', 'threads_feed' => 'aktualności', 'unknown' => 'inne',
+    ];
+
+    public static function placementName(string $platform, string $position): string
+    {
+        return (self::PUBLISHERS[$platform] ?? ucfirst(str_replace('_', ' ', $platform))).' – '.(self::POSITIONS[$position] ?? str_replace('_', ' ', $position));
+    }
+
+    /**
+     * Umiejscowienia Meta w okresie: CTR linku, odsetek kliknięć kończących się wejściem na stronę (LPV)
+     * i flaga „podejrzane” (kliknięcia bez wejść – przypadkowe / „za nagrodę”).
+     */
+    public function placements(CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return DB::table('placement_metrics as pm')
+            ->join('campaigns as c', 'c.id', '=', 'pm.campaign_id')
+            ->where('pm.client_id', $this->client->id)
+            ->whereBetween('pm.date', [$from->toDateString(), $to->toDateString()])
+            ->where(fn ($q) => $q->whereNull('c.destination')->orWhereNotIn('c.destination', \App\Models\Campaign::OFF_SITE_DESTINATIONS))
+            ->groupBy('pm.publisher_platform', 'pm.platform_position')
+            ->selectRaw('pm.publisher_platform, pm.platform_position, SUM(pm.impressions) as impressions, SUM(pm.clicks) as clicks, SUM(pm.link_clicks) as link_clicks, SUM(pm.landing_page_views) as landing_page_views, SUM(pm.cost) as cost, SUM(pm.conversions) as conversions')
+            ->get()
+            ->map(function ($r) {
+                $link = (int) $r->link_clicks;
+                $lpv = (int) $r->landing_page_views;
+                $impr = (int) $r->impressions;
+
+                return [
+                    'platform' => $r->publisher_platform,
+                    'position' => $r->platform_position,
+                    'name' => self::placementName($r->publisher_platform, $r->platform_position),
+                    'impressions' => $impr,
+                    'link_clicks' => $link,
+                    'landing_page_views' => $lpv,
+                    'cost' => round((float) $r->cost, 2),
+                    'conversions' => round((float) $r->conversions, 2),
+                    'link_ctr' => $impr ? round($link / $impr * 100, 2) : 0,
+                    'lpv_rate' => $link ? round($lpv / $link * 100) : null,
+                    'cost_per_lpv' => $lpv ? round((float) $r->cost / $lpv, 2) : null,
+                    // ≥5 kliknięć i prawie nikt nie doszedł na stronę albo nienaturalnie wysoki CTR bez wejść
+                    'suspicious' => ($link >= 5 && $lpv / max(1, $link) < 0.2) || ($impr >= 20 && $link / max(1, $impr) > 0.15 && $lpv === 0),
+                ];
+            })
+            ->sortByDesc('link_clicks')->values();
+    }
+
+    /**
+     * Lejek Meta: wyświetlenia → kliknięcia linku → wejścia na stronę (LPV, Meta) → sesje z Meta w GA4 → wyniki.
+     * Każdy krok z odsetkiem przejścia i normą (poniżej normy = problem do sprawdzenia).
+     */
+    public function funnel(CarbonInterface $from, CarbonInterface $to): ?array
+    {
+        $range = [$from->toDateString(), $to->toDateString()];
+        $meta = DB::table('campaigns as c')->join('campaign_metrics as m', 'm.campaign_id', '=', 'c.id')
+            ->where('c.client_id', $this->client->id)->where('c.platform', 'meta_ads')->whereBetween('m.date', $range)
+            ->where(fn ($q) => $q->whereNull('c.destination')->orWhereNotIn('c.destination', \App\Models\Campaign::OFF_SITE_DESTINATIONS))
+            ->selectRaw('SUM(m.impressions) as impressions, SUM(m.link_clicks) as link_clicks, SUM(m.landing_page_views) as lpv, SUM(m.cost) as cost, SUM(m.conversions) as conversions, COUNT(m.link_clicks) as with_links')
+            ->first();
+        if (! $meta || ! (int) $meta->impressions || ! (int) $meta->with_links) {
+            return null; // brak danych Meta albo dane sprzed dodania kliknięć w link
+        }
+
+        $sources = DB::table('analytics_sources')->where('client_id', $this->client->id)->whereBetween('date', $range)
+            ->groupBy('source_medium')->selectRaw('source_medium, SUM(sessions) as sessions, SUM(key_events) as key_events')->get();
+        $metaSources = $sources->filter(fn ($s) => preg_match(self::META_SOURCE_REGEX, $s->source_medium));
+        $hasGa = $sources->isNotEmpty();
+
+        $impr = (int) $meta->impressions;
+        $link = (int) $meta->link_clicks;
+        $lpv = (int) $meta->lpv;
+        $sessions = (int) $metaSources->sum('sessions');
+        $results = round((float) $meta->conversions, 2);
+        $rate = fn ($a, $b) => $b > 0 ? round($a / $b * 100, 1) : null;
+
+        return [
+            'cost' => round((float) $meta->cost, 2),
+            'steps' => array_values(array_filter([
+                ['key' => 'impressions', 'label' => 'Wyświetlenia', 'value' => $impr, 'rate' => null, 'norm' => null, 'hint' => null],
+                ['key' => 'link_clicks', 'label' => 'Kliknięcia w link', 'value' => $link, 'rate' => $rate($link, $impr), 'norm' => 0.8,
+                    'hint' => 'CTR linku. Poniżej 0,8% – reklama słabo przyciąga (kreacja, nagłówek, grupa odbiorców).'],
+                ['key' => 'lpv', 'label' => 'Wejścia na stronę (Meta)', 'value' => $lpv, 'rate' => $rate($lpv, $link), 'norm' => 60,
+                    'hint' => 'Norma 60–80%. Mniej = przypadkowe kliknięcia (Audience Network), wolna strona albo przekierowania.'],
+                $hasGa ? ['key' => 'ga_sessions', 'label' => 'Sesje z Meta (GA4)', 'value' => $sessions, 'rate' => $rate($sessions, $lpv), 'norm' => 50,
+                    'hint' => 'Część ruchu znika przez odmowę zgody na cookies – ale poniżej 50% sprawdź UTM-y w linku reklamy i tag GA4.'] : null,
+                ['key' => 'results', 'label' => ($this->client->goal ?? 'sales') === 'sales' ? 'Zakupy (Meta)' : 'Leady (Meta)', 'value' => $results,
+                    'rate' => $rate($results, $lpv), 'norm' => null, 'hint' => 'Odsetek wejść zakończonych wynikiem (konwersja strony).'],
+            ])),
+            'ga_sources' => $metaSources->sortByDesc('sessions')->take(6)->map(fn ($s) => ['source_medium' => $s->source_medium, 'sessions' => (int) $s->sessions])->values()->all(),
+            'has_ga' => $hasGa,
+        ];
+    }
+
 
     /** Statystyki kampanii w okresie. */
     public function campaigns(CarbonInterface $from, CarbonInterface $to, ?string $platform = null): Collection
@@ -42,8 +146,8 @@ class Metrics
             ->where('c.client_id', $this->client->id)
             ->whereBetween('m.date', [$from->toDateString(), $to->toDateString()])
             ->when($platform, fn ($q) => $q->where('c.platform', $platform))
-            ->groupBy('c.id', 'c.name', 'c.platform', 'c.status', 'c.channel_type', 'c.daily_budget')
-            ->selectRaw('c.id, c.name, c.platform, c.status, c.channel_type, c.daily_budget, '.self::SUMS.
+            ->groupBy('c.id', 'c.name', 'c.platform', 'c.status', 'c.channel_type', 'c.daily_budget', 'c.destination')
+            ->selectRaw('c.id, c.name, c.platform, c.status, c.channel_type, c.daily_budget, c.destination, '.self::SUMS.
                 ', AVG(m.budget_lost_is) as budget_lost_is, SUM(m.frequency * m.impressions) / NULLIF(SUM(CASE WHEN m.frequency IS NOT NULL THEN m.impressions END), 0) as frequency')
             ->get()
             ->map(fn ($r) => self::derive((array) $r))
