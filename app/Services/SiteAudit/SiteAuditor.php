@@ -46,9 +46,19 @@ class SiteAuditor
 
     private function audit(SiteAudit $audit): void
     {
-        $root = rtrim($audit->url, '/').'/';
+        $audit->update(['status' => 'done', 'finished_at' => now()] + $this->crawl($audit->url));
+    }
+
+    /**
+     * Sam audyt (bez zapisu) – używany też w audytach dowolnych stron (potencjalni klienci).
+     * @return array{score:int, pages_crawled:int, issues:array, summary:array, pages:array}
+     */
+    public function crawl(string $url, ?int $maxPages = null): array
+    {
+        $this->pages = $this->linkedFrom = $this->external = [];
+        $root = rtrim($url, '/').'/';
         $this->host = $this->bareHost((string) parse_url($root, PHP_URL_HOST));
-        $max = (int) config('adpilot.site_audit.max_pages', 60);
+        $max = $maxPages ?? (int) config('adpilot.site_audit.max_pages', 60);
 
         // robots.txt i mapa strony
         $robots = $this->fetchText($root.'robots.txt');
@@ -100,9 +110,7 @@ class SiteAuditor
             $penalty += ['critical' => 15, 'high' => 8, 'medium' => 4, 'low' => 1.5][$i['severity']] * $share;
         }
 
-        $audit->update([
-            'status' => 'done',
-            'finished_at' => now(),
+        return [
             'pages_crawled' => count($this->pages),
             'score' => max(0, (int) round(100 - $penalty)),
             'issues' => array_values($issues),
@@ -121,7 +129,7 @@ class SiteAuditor
             'pages' => array_values(array_map(fn ($p) => array_intersect_key($p, array_flip(
                 ['url', 'status', 'ms', 'bytes', 'title', 'description', 'h1', 'noindex', 'words', 'redirects', 'error']
             )), $this->pages)),
-        ]);
+        ];
     }
 
     // ------------------------------------------------------------------ pobieranie

@@ -58,6 +58,53 @@ export function DueLabel({ item }: { item: BillingItem }) {
     );
 }
 
+export interface ExtraWork {
+    client: { id: number; name: string; currency: string };
+    total: number;
+    tasks: { id: number; title: string; amount: number; done_at: string | null; minutes: number | null }[];
+}
+
+/** Wykonane zadania z kwotą – do dopisania na fakturę. */
+export function ExtraWorkList({ groups }: { groups: ExtraWork[] }) {
+    if (!groups.length)
+        return <p className="text-muted-foreground text-sm">Brak prac dodatkowych do zafakturowania. Kwotę wpiszesz w rozwiniętym zadaniu.</p>;
+    return (
+        <div className="grid gap-3">
+            {groups.map((g) => (
+                <div key={g.client.id} className="rounded-lg border p-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Link href={`/clients/${g.client.id}/billing`} className="font-medium hover:underline">
+                            {g.client.name}
+                        </Link>
+                        <span className="ml-auto font-semibold tabular-nums">{money(g.total, g.client.currency, 2)} netto</span>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7"
+                            onClick={() =>
+                                confirm(`Oznaczyć ${g.tasks.length} prac (${money(g.total, g.client.currency, 2)}) jako zafakturowane?`) &&
+                                router.post(`/clients/${g.client.id}/billing/extra-work-invoiced`, {}, { preserveScroll: true })
+                            }
+                        >
+                            <CheckCircle2 className="size-3.5" /> Zafakturowano
+                        </Button>
+                    </div>
+                    <ul className="mt-2 grid gap-0.5 text-sm">
+                        {g.tasks.map((t) => (
+                            <li key={t.id} className="flex justify-between gap-3">
+                                <span>
+                                    {t.title} <span className="text-muted-foreground text-xs">{date(t.done_at)}</span>
+                                </span>
+                                <span className="tabular-nums">{money(t.amount, g.client.currency, 2)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function BillingForm({
     clientId,
     item,

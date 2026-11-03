@@ -1,9 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { type SharedData } from '@/types';
 import { type CareStatus, type CareTask } from '@/types/adpilot';
-import { router } from '@inertiajs/react';
-import { AlarmClock, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Timer, Trash2 } from 'lucide-react';
+import { router, usePage } from '@inertiajs/react';
+import { AlarmClock, Banknote, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 /** Data lokalna RRRR-MM-DD (nie UTC – inaczej po północy byłby poprzedni dzień). */
@@ -136,6 +137,32 @@ function TimeInput({ task, onSave }: { task: CareTask; onSave: (minutes: number 
     );
 }
 
+/** Kwota netto za zadanie (prace dodatkowe) – trafia do „Rozliczeń” jako do zafakturowania. */
+function AmountInput({ task, onSave }: { task: CareTask; onSave: (amount: number | null) => void }) {
+    const [value, setValue] = useState(task.amount != null ? String(task.amount) : '');
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            <Banknote className="text-muted-foreground size-4" />
+            <span className="text-muted-foreground text-xs">Kwota dla klienta (netto):</span>
+            <input
+                value={value}
+                inputMode="decimal"
+                disabled={!!task.invoiced_at}
+                onChange={(e) => setValue(e.target.value.replace(/[^\d.,]/g, ''))}
+                onBlur={() => {
+                    const n = value.trim() === '' ? null : Number(value.replace(',', '.'));
+                    if (n !== (task.amount ?? null) && (n === null || !Number.isNaN(n))) onSave(n);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                placeholder="0 = w abonamencie"
+                className="border-input bg-background h-7 w-36 rounded-md border px-2 text-sm"
+                aria-label="Kwota netto"
+            />
+            <span className="text-muted-foreground text-xs">{task.invoiced_at ? 'zafakturowano' : 'zł – pojawi się w Rozliczeniach do faktury'}</span>
+        </div>
+    );
+}
+
 export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; showPeriod?: boolean }) {
     const [open, setOpen] = useState(false);
     const [note, setNote] = useState(task.note ?? '');
@@ -143,7 +170,8 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
     const done = task.status === 'done';
     const skipped = task.status === 'skipped';
 
-    const update = (data: { status?: CareStatus; note?: string | null; due_date?: string; minutes?: number | null }) =>
+    const isAdmin = !!usePage<SharedData>().props.admin;
+    const update = (data: { status?: CareStatus; note?: string | null; due_date?: string; minutes?: number | null; amount?: number | null }) =>
         router.patch(`/care/tasks/${task.id}`, data, { preserveScroll: true, preserveState: true });
 
     return (
@@ -195,6 +223,11 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                                 <Timer className="size-3" /> {formatMinutes(task.minutes)}
                             </span>
                         )}
+                        {isAdmin && !!task.amount && (
+                            <span className="text-muted-foreground inline-flex items-center gap-1">
+                                <Banknote className="size-3" /> {task.amount.toLocaleString('pl-PL')} zł{task.invoiced_at ? ' · zafakturowano' : ''}
+                            </span>
+                        )}
                         {!task.care_template_id && <span className="text-muted-foreground">jednorazowe</span>}
                     </div>
 
@@ -221,6 +254,7 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                                 className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                             />
                             {task.status !== 'skipped' && <TimeInput task={task} onSave={(minutes) => update({ minutes })} />}
+                            {task.status !== 'skipped' && isAdmin && <AmountInput task={task} onSave={(amount) => update({ amount })} />}
                         </div>
                     )}
                 </div>

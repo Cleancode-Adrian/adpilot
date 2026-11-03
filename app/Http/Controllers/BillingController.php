@@ -27,6 +27,7 @@ class BillingController extends Controller
             'toInvoice' => $items->where('type', 'subscription')->filter(fn ($b) => $b->next_date && CarbonImmutable::parse($b->next_date)->lte($endOfMonth))->map($row)->values(),
             'renewals' => $items->where('type', '!=', 'subscription')->filter(fn ($b) => $b->next_date && CarbonImmutable::parse($b->next_date)->lte($in60))->map($row)->values(),
             'all' => $items->map($row)->values(),
+            'extraWork' => $this->extraWork(),
             'mrr' => round($items->sum(fn ($b) => $b->monthlyValue()), 2),
             'mrrSubscriptions' => round($items->where('type', 'subscription')->sum(fn ($b) => $b->monthlyValue()), 2),
             'types' => BillingItem::TYPES,
@@ -40,11 +41,33 @@ class BillingController extends Controller
             'client' => app(ClientController::class)->clientProps($client),
             'items' => $client->billingItems()->orderByDesc('active')->orderByRaw('next_date is null')->orderBy('next_date')->get()
                 ->map(fn (BillingItem $b) => [...$b->toArray(), 'days_left' => $b->daysLeft(), 'monthly_value' => $b->monthlyValue()]),
+            'extraWork' => $this->extraWork($client->id),
             'quotes' => $client->quotes()->with('items')->latest('id')->get()
                 ->map(fn (\App\Models\Quote $q) => [...$q->only(['id', 'number', 'title', 'status', 'currency']), 'totals' => $q->totals(), 'expired' => $q->isExpired()]),
             'types' => BillingItem::TYPES,
             'periods' => BillingItem::PERIOD_LABELS,
         ]);
+    }
+
+    /** Wykonane zadania z kwotą, jeszcze niezafakturowane – pogrupowane wg klienta. */
+    private function extraWork(?int $clientId = null): array
+    {
+        return \App\Models\CareTask::where('status', 'done')->whereNotNull('amount')->where('amount', '>', 0)->whereNull('invoiced_at')
+            ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
+            ->whereHas('client', fn ($q) => $q->active())->with('client:id,name,currency')->orderBy('done_at')->get()
+            ->groupBy('client_id')->map(fn ($tasks) => [
+                'client' => $tasks->first()->client->only(['id', 'name', 'currency']),
+                'total' => round($tasks->sum('amount'), 2),
+                'tasks' => $tasks->map(fn ($t) => $t->only(['id', 'title', 'amount', 'done_at', 'minutes']))->values(),
+            ])->values()->all();
+    }
+
+    /** „Zafakturowano” – wszystkie niezafakturowane prace dodatkowe klienta. */
+    public function invoiceExtraWork(Client $client)
+    {
+        $n = $client->careTasks()->where('status', 'done')->whereNotNull('amount')->where('amount', '>', 0)->whereNull('invoiced_at')->update(['invoiced_at' => now()]);
+
+        return back()->with('success', "Oznaczono $n prac jako zafakturowane.");
     }
 
     public function store(Request $request, Client $client)

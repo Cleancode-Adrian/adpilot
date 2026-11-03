@@ -107,6 +107,12 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                             <div className="mb-3">
                                 <div className="flex flex-wrap items-center gap-4">
                                     <CareProgress done={client.care.done} total={client.care.total} />
+                                    {!!client.care.amount && (
+                                        <span className="text-muted-foreground text-xs">
+                                            prace dodatkowe: {client.care.amount.toLocaleString('pl-PL')} zł
+                                            {!!client.care.amount_open && ` (do faktury: ${client.care.amount_open.toLocaleString('pl-PL')} zł)`}
+                                        </span>
+                                    )}
                                     {!!client.care.minutes && (
                                         <span className="text-muted-foreground text-xs">
                                             czas pracy w tym miesiącu: {formatMinutes(client.care.minutes)}

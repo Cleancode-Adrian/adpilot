@@ -11,6 +11,7 @@ use App\Http\Controllers\RecommendationController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\WebAuditController;
 use App\Http\Controllers\WordPressController;
 use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,9 @@ Route::get('r/{token}/{report}/pdf', [ReportController::class, 'pdf'])->name('pu
 Route::get('a/{token}/{audit}', [SiteController::class, 'public'])->name('public.site-audit');
 // Oferta dla klienta: podgląd, PDF, akceptacja / odrzucenie (link z tokenem, bez logowania)
 Route::get('o/{token}', [QuoteController::class, 'public'])->name('public.quote');
+// Audyt dowolnej strony – raport dla potencjalnego klienta
+Route::get('audyt/{token}', [WebAuditController::class, 'public'])->name('public.web-audit');
+Route::get('audyt/{token}/pdf', [WebAuditController::class, 'pdf'])->name('public.web-audit.pdf');
 Route::get('o/{token}/pdf', [QuoteController::class, 'pdf'])->name('public.quote.pdf');
 Route::post('o/{token}', [QuoteController::class, 'decide'])->middleware('throttle:10,1')->name('public.quote.decide');
 Route::get('a/{token}/{audit}/pdf', [SiteController::class, 'pdf'])->name('public.site-audit.pdf');
@@ -85,8 +89,17 @@ Route::middleware(['auth'])->group(function () {
         Route::put('billing/{item}', [BillingController::class, 'update'])->name('billing.update');
         Route::delete('billing/{item}', [BillingController::class, 'destroy'])->name('billing.destroy');
         Route::post('billing/{item}/advance', [BillingController::class, 'advance'])->name('billing.advance');
+        Route::post('clients/{client}/billing/extra-work-invoiced', [BillingController::class, 'invoiceExtraWork'])->name('billing.extra-work');
         Route::post('billing/{item}/lookup', [BillingController::class, 'lookup'])->middleware('throttle:20,1')->name('billing.lookup');
     });
+
+    // Audyt dowolnej strony (potencjalni klienci)
+    Route::get('audits', [WebAuditController::class, 'index'])->name('audits.index');
+    Route::post('audits', [WebAuditController::class, 'store'])->middleware('throttle:20,1')->name('audits.store');
+    Route::get('audits/{audit}', [WebAuditController::class, 'show'])->name('audits.show');
+    Route::post('audits/{audit}/rerun', [WebAuditController::class, 'rerun'])->middleware('throttle:20,1')->name('audits.rerun');
+    Route::post('audits/{audit}/convert', [WebAuditController::class, 'convert'])->name('audits.convert');
+    Route::delete('audits/{audit}', [WebAuditController::class, 'destroy'])->name('audits.destroy');
 
     // Strona: dostępność, SSL, audyt SEO/techniczny
     Route::get('clients/{client}/site', [SiteController::class, 'index'])->name('clients.site');

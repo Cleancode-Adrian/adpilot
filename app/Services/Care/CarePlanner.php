@@ -141,6 +141,10 @@ class CarePlanner
             'done' => $tasks->whereIn('status', ['done', 'skipped'])->count(),
             'overdue' => $client->careTasks()->due(now()->subDay()->toDateString())->count(),
             'due_today' => $client->careTasks()->todo()->where('due_date', $today)->count(),
+            // kwoty: wykonane zadania z kwotą w tym miesiącu (razem i jeszcze niezafakturowane)
+            'amount' => round((float) $client->careTasks()->where('status', 'done')->whereNotNull('amount')
+                ->where(fn ($q) => $q->where('period', $period)->orWhere('done_at', 'like', $period.'%'))->sum('amount'), 2),
+            'amount_open' => round((float) $client->careTasks()->where('status', 'done')->whereNotNull('amount')->whereNull('invoiced_at')->sum('amount'), 2),
             // czas pracy: zadania wykonane w tym miesiącu (także zaległe z wcześniejszych)
             'minutes' => (int) $client->careTasks()->where('status', 'done')
                 ->where(fn ($q) => $q->where('period', $period)->orWhere('done_at', 'like', $period.'%'))->sum('minutes'),

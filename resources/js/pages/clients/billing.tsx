@@ -1,4 +1,4 @@
-import { BillingForm, type BillingItem, BillingRow } from '@/components/adpilot/billing';
+import { BillingForm, type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
 import { Section } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import ClientLayout from '@/layouts/client-layout';
@@ -22,12 +22,14 @@ interface QuoteRow {
 export default function ClientBilling({
     client,
     items,
+    extraWork,
     quotes,
     types,
     periods,
 }: {
     client: ClientProps;
     items: BillingItem[];
+    extraWork: ExtraWork[];
     quotes: QuoteRow[];
     types: Record<string, string>;
     periods: Record<string, string>;
@@ -71,6 +73,10 @@ export default function ClientBilling({
                         )}
                     </ul>
                 )}
+            </Section>
+
+            <Section title="Prace dodatkowe do zafakturowania">
+                <ExtraWorkList groups={extraWork} />
             </Section>
 
             <Section

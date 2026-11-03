@@ -1,4 +1,4 @@
-import { type BillingItem, BillingRow } from '@/components/adpilot/billing';
+import { type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
 import { EmptyState, Section } from '@/components/adpilot/ui';
 import AppLayout from '@/layouts/app-layout';
 import { money } from '@/lib/format';
@@ -6,6 +6,7 @@ import { Head } from '@inertiajs/react';
 
 export default function Billing({
     toInvoice,
+    extraWork,
     renewals,
     all,
     mrr,
@@ -14,6 +15,7 @@ export default function Billing({
     periods,
 }: {
     toInvoice: BillingItem[];
+    extraWork: ExtraWork[];
     renewals: BillingItem[];
     all: BillingItem[];
     mrr: number;
@@ -59,6 +61,13 @@ export default function Billing({
                             ))}
                         </ul>
                     )}
+                </Section>
+
+                <Section
+                    title="Prace dodatkowe do zafakturowania"
+                    description="Wykonane zadania z wpisaną kwotą. Po wystawieniu faktury kliknij „Zafakturowano”."
+                >
+                    <ExtraWorkList groups={extraWork} />
                 </Section>
 
                 <Section title="Odnowienia w ciągu 60 dni" description="Domena po terminie może trafić w obce ręce – odnawiaj z wyprzedzeniem.">

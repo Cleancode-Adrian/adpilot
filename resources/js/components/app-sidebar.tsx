@@ -3,7 +3,19 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Activity, BarChart3, Building2, FileSignature, ListChecks, Palette, PlusCircle, ShieldCheck, UsersRound, Wallet } from 'lucide-react';
+import {
+    Activity,
+    BarChart3,
+    Building2,
+    FileSignature,
+    ListChecks,
+    Palette,
+    PlusCircle,
+    ScanSearch,
+    ShieldCheck,
+    UsersRound,
+    Wallet,
+} from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -13,6 +25,7 @@ export function AppSidebar() {
     const clientItems: NavItem[] = [
         { title: 'Wszyscy klienci', url: '/clients', icon: Building2, badge: (wp_alerts ?? 0) + (sites_down ?? 0) },
         { title: 'Zadania i opieka', url: '/care', icon: ShieldCheck, badge: care_due },
+        { title: 'Audyt dowolnej strony', url: '/audits', icon: ScanSearch },
         ...(admin
             ? [
                   { title: 'Oferty', url: '/quotes', icon: FileSignature },

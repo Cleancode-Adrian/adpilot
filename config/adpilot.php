@@ -68,5 +68,6 @@ return [
     'site_audit' => [
         'max_pages' => (int) env('SITE_AUDIT_MAX_PAGES', 60),
         'max_external' => (int) env('SITE_AUDIT_MAX_EXTERNAL', 40),
+        'prospect_pages' => (int) env('SITE_AUDIT_PROSPECT_PAGES', 30), // audyt dowolnej strony (potencjalni klienci)
     ],
 ];

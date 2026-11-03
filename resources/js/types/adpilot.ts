@@ -52,6 +52,8 @@ export interface CareSummary {
     overdue: number;
     due_today: number;
     minutes?: number;
+    amount?: number;
+    amount_open?: number;
 }
 
 export type CareStatus = 'todo' | 'done' | 'skipped';
@@ -68,6 +70,8 @@ export interface CareTask {
     done_at: string | null;
     note: string | null;
     minutes?: number | null;
+    amount?: number | null;
+    invoiced_at?: string | null;
     done_by?: { id: number; name: string } | null;
 }
 

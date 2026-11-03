@@ -34,7 +34,7 @@ class CareController extends Controller
             $tasks = $c->careTasks()
                 ->where(fn ($q) => $q->where('period', $period)->orWhere(fn ($o) => $o->due()->where('period', '<', $period)))
                 ->orderByRaw("case status when 'todo' then 0 else 1 end")->orderBy('due_date')->orderBy('id')
-                ->get(['id', 'client_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note', 'minutes']);
+                ->get(['id', 'client_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note', 'minutes', 'amount', 'invoiced_at']);
 
             return [
                 'client' => $c,
@@ -61,7 +61,7 @@ class CareController extends Controller
             $this->planner->ensureMonth($client, $month);
         }
 
-        $columns = ['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes'];
+        $columns = ['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes', 'amount', 'invoiced_at'];
 
         return Inertia::render('clients/care', [
             'client' => app(ClientController::class)->clientProps($client),
@@ -99,6 +99,7 @@ class CareController extends Controller
             'status' => ['sometimes', Rule::in(['todo', 'done', 'skipped'])],
             'note' => 'sometimes|nullable|string|max:5000',
             'minutes' => 'sometimes|nullable|integer|min:0|max:10000',
+            'amount' => 'sometimes|nullable|numeric|min:0|max:1000000',
             'title' => 'sometimes|string|max:255',
             'due_date' => 'sometimes|date',
         ]);
