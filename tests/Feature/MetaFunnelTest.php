@@ -140,4 +140,33 @@ class MetaFunnelTest extends TestCase
             ->where('funnel.steps.2.key', 'lpv')
             ->where('placements', fn ($rows) => collect($rows)->contains(fn ($r) => $r['platform'] === 'audience_network' && $r['suspicious'])));
     }
+
+    public function test_quick_hourly_sync_fetches_yesterday_and_today_without_rules(): void
+    {
+        $this->fakeMeta(now()->subHours(2)->toIso8601String());
+        $client = $this->metaClient();
+
+        $log = app(\App\Services\ClientSync::class)->sync($client, true);
+        $this->assertContains('Meta Ads: OK', $log);
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), '/act_1/insights')
+            && str_contains(urldecode($r->url()), '"since":"'.now()->subDay()->toDateString().'"')
+            && str_contains(urldecode($r->url()), '"until":"'.now()->toDateString().'"'));
+        $this->assertSame(0, $client->recommendations()->count(), 'szybka synchronizacja nie przelicza reguł');
+        $this->assertNotNull($client->integration('meta')->fresh()->last_synced_at);
+
+        // pełna (ręczna/nocna) – 30 dni wstecz + dziś, z regułami
+        app(\App\Services\ClientSync::class)->sync($client);
+        Http::assertSent(fn (Request $r) => str_contains(urldecode($r->url()), '"since":"'.now()->subDays(30)->toDateString().'"'));
+        $this->assertGreaterThan(0, $client->recommendations()->count());
+    }
+
+    public function test_ads_page_shows_today_strip(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $client = $this->metaClient();
+        $c = $client->campaigns()->create(['platform' => 'meta_ads', 'external_id' => 'x', 'name' => 'Dziś', 'destination' => 'WEBSITE']);
+        DB::table('campaign_metrics')->insert(['campaign_id' => $c->id, 'date' => now()->toDateString(), 'impressions' => 120, 'clicks' => 6, 'link_clicks' => 5, 'landing_page_views' => 3, 'cost' => 4.2, 'conversions' => 0, 'conversion_value' => 0]);
+
+        $this->get("/clients/{$client->id}/ads")->assertInertia(fn ($p) => $p->where('today.cost', 4.2)->where('today.meta.landing_page_views', 3));
+    }
 }

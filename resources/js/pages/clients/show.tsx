@@ -1,5 +1,6 @@
 import { DailyTable, LeadsChart, RevenueChart, SpendChart } from '@/components/adpilot/charts';
 import { type Funnel, MetaFunnel, type Placement, PlacementTable } from '@/components/adpilot/meta-funnel';
+import { type Today, TodayStrip } from '@/components/adpilot/today-strip';
 import { EmptyState, KpiTile, NativeSelect, PlatformDot, Section } from '@/components/adpilot/ui';
 import ClientLayout from '@/layouts/client-layout';
 import { money, num, pct, platformName, roas } from '@/lib/format';
@@ -152,7 +153,8 @@ export default function ClientShow({
     searchTerms,
     funnel,
     placements,
-}: Props & { funnel: Funnel | null; placements: Placement[] }) {
+    today,
+}: Props & { funnel: Funnel | null; placements: Placement[]; today: Today | null }) {
     const [platform, setPlatform] = useState<'all' | 'google_ads' | 'meta_ads'>('all');
     const cur = client.currency;
     const a = kpis.ads;
@@ -187,6 +189,8 @@ export default function ClientShow({
                     poprzednimi {days} dniami
                 </span>
             </div>
+
+            {today && <TodayStrip today={today} currency={cur} leads={isLeads} />}
 
             {noData ? (
                 <EmptyState title="Brak danych">

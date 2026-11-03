@@ -125,6 +125,12 @@ class ClientController extends Controller
             'channels' => $m->channels($from, $to),
             'searchTerms' => $client->searchTerms()->with('campaign:id,name')->orderByDesc('cost')->limit(50)->get(),
             'funnel' => $m->funnel($from, $to),
+            'today' => ($today = $m->totals(now()->startOfDay(), now()->startOfDay()))['impressions'] > 0 ? [
+                ...$today,
+                'meta' => $m->totals(now()->startOfDay(), now()->startOfDay(), 'meta_ads'),
+                'google' => $m->totals(now()->startOfDay(), now()->startOfDay(), 'google_ads'),
+                'synced_at' => $client->integrations()->max('last_synced_at'),
+            ] : null,
             'placements' => $m->placements($from, $to)->filter(fn ($p) => $p['impressions'] > 0)->values(),
         ]);
     }

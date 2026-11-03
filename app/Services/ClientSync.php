@@ -27,17 +27,25 @@ class ClientSync
         private RuleEngine $engine,
     ) {}
 
-    public function sync(Client $client): array
+    /**
+     * Pełna: ostatnie 30 dni + dziś, potem reguły.
+     * Szybka (co godzinę): tylko wczoraj i dziś – świeże wydatki i kliknięcia, bez przeliczania reguł.
+     */
+    public function sync(Client $client, bool $quick = false): array
     {
         $log = [];
 
+        if ($client->is_demo && $quick) {
+            return ['Demo – pomijam szybką synchronizację.'];
+        }
         if ($client->is_demo) {
             (new DemoDataGenerator)->generate($client);
             $client->integrations()->update(['last_synced_at' => now(), 'last_error' => null]);
             $log[] = 'Dane demo wygenerowane ponownie.';
         } else {
-            $to = now()->subDay()->toDateString();
-            $from = now()->subDays(config('adpilot.sync_lookback_days'))->toDateString();
+            // dziś też – dane niepełne, ale nadpisują się przy każdej kolejnej synchronizacji
+            $to = now()->toDateString();
+            $from = $quick ? now()->subDay()->toDateString() : now()->subDays(config('adpilot.sync_lookback_days'))->toDateString();
             $writer = new MetricsWriter($client);
 
             foreach ($client->integrations()->where('status', 'connected')->get() as $integration) {
@@ -63,6 +71,10 @@ class ClientSync
                     $log[] = ucfirst($integration->provider).': BŁĄD – '.$e->getMessage();
                 }
             }
+        }
+
+        if ($quick) {
+            return $log;
         }
 
         $stats = $this->engine->run($client);

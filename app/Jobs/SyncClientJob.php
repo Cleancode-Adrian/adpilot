@@ -15,7 +15,7 @@ class SyncClientJob implements ShouldQueue, ShouldBeUnique
     public int $timeout = 900;
     public int $tries = 2;
 
-    public function __construct(public Client $client) {}
+    public function __construct(public Client $client, public bool $quick = false) {}
 
     public function uniqueId(): string
     {
@@ -24,6 +24,6 @@ class SyncClientJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(ClientSync $sync): void
     {
-        $sync->sync($this->client);
+        $sync->sync($this->client, $this->quick);
     }
 }

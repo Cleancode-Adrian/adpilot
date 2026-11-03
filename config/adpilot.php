@@ -62,4 +62,5 @@ return [
 
     // Ile dni wstecz pobierać przy każdej synchronizacji (konwersje dopisują się z opóźnieniem)
     'sync_lookback_days' => (int) env('ADPILOT_SYNC_LOOKBACK', 30),
+    'live_sync' => (bool) env('ADPILOT_LIVE_SYNC', true), // dane z reklam co godzinę (6:15–23:15)
 ];

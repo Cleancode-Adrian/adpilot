@@ -136,6 +136,12 @@ Schedule::job(new HeartbeatJob)->everyFiveMinutes()->name('adpilot-worker-heartb
 Schedule::call(fn () => Client::active()->runsAds()->get()->each(fn ($c) => SyncClientJob::dispatch($c)))
     ->dailyAt('05:30')->name('adpilot-daily-sync');
 
+// Na bieżąco: co godzinę wczoraj + dziś (Meta odświeża dane co ~15–30 min, Google Ads z opóźnieniem do ~3 h)
+Schedule::call(fn () => Client::active()->runsAds()->where('is_demo', false)
+    ->whereHas('integrations', fn ($q) => $q->where('status', 'connected'))->get()
+    ->each(fn ($c) => SyncClientJob::dispatch($c, true)))
+    ->hourlyAt(15)->between('6:00', '23:30')->when(fn () => config('adpilot.live_sync'))->name('adpilot-live-sync');
+
 Schedule::call(function () {
     Client::active()->runsAds()->where('is_demo', false)->get()
         ->each(fn ($c) => RunTrackingAuditJob::dispatch($c->audits()->create(['url' => $c->website_url])));
