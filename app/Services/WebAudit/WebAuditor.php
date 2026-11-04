@@ -15,7 +15,7 @@ class WebAuditor
 {
     public const AREAS = [
         'seo' => 'SEO i technika',
-        'speed' => 'Szybkość',
+        'speed' => 'Szybkość i optymalizacja',
         'tracking' => 'Pomiar i marketing',
         'security' => 'Bezpieczeństwo',
     ];
