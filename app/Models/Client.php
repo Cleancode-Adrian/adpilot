@@ -12,10 +12,11 @@ class Client extends Model
 {
     protected $fillable = [
         'agency_id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
-        'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at',
+        'monthly_budget', 'daily_budget', 'contact_email',
+        'billing_name', 'tax_id', 'billing_street', 'billing_post_code', 'billing_city', 'billing_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at',
     ];
 
-    protected $hidden = ['report_token'];
+    protected $hidden = ['report_token', 'request_token'];
 
     protected function casts(): array
     {
@@ -39,6 +40,16 @@ class Client extends Model
         static::creating(function (Client $client) {
             $client->report_token ??= Str::random(48);
         });
+    }
+
+    /** Link do formularza zgłoszeń dla klienta (token tworzony przy pierwszym użyciu). */
+    public function requestUrl(): string
+    {
+        if (! $this->request_token) {
+            $this->forceFill(['request_token' => Str::random(40)])->saveQuietly();
+        }
+
+        return route('public.request', $this->request_token);
     }
 
     /** Domyślne zdarzenia GA4 traktowane jako lead (rekomendowane nazwy Google + popularne własne). */

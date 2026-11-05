@@ -1,11 +1,25 @@
+import { elapsed, useNow } from '@/components/adpilot/timer-bar';
 import { NetGross, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { type CareStatus, type CareTask } from '@/types/adpilot';
-import { router, usePage } from '@inertiajs/react';
-import { AlarmClock, Banknote, CalendarClock, ChevronDown, CircleSlash, MessageSquare, RotateCcw, Timer, Trash2 } from 'lucide-react';
+import { Link, router, usePage } from '@inertiajs/react';
+import {
+    AlarmClock,
+    Banknote,
+    CalendarClock,
+    ChevronDown,
+    CircleSlash,
+    Inbox,
+    MessageSquare,
+    Play,
+    RotateCcw,
+    Square,
+    Timer,
+    Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 /** Data lokalna RRRR-MM-DD (nie UTC – inaczej po północy byłby poprzedni dzień). */
@@ -165,12 +179,14 @@ function AmountInput({ task, onSave }: { task: CareTask; onSave: (amount: number
     );
 }
 
-export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; showPeriod?: boolean }) {
+export function CareTaskRow({ task, showPeriod = false, showClient = false }: { task: CareTask; showPeriod?: boolean; showClient?: boolean }) {
     const [open, setOpen] = useState(false);
     const [note, setNote] = useState(task.note ?? '');
     const [editDate, setEditDate] = useState(false);
     const done = task.status === 'done';
     const skipped = task.status === 'skipped';
+    const running = !!task.timer_started_at;
+    const now = useNow(running);
 
     const isAdmin = !!usePage<SharedData>().props.admin;
     const update = (data: { status?: CareStatus; note?: string | null; due_date?: string; minutes?: number | null; amount?: number | null }) =>
@@ -191,8 +207,17 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                     aria-label={done ? 'Oznacz jako niewykonane' : 'Oznacz jako wykonane'}
                 />
                 <div className="min-w-0 flex-1">
+                    {showClient && task.client && (
+                        <Link href={`/clients/${task.client.id}/care`} className="text-muted-foreground block text-xs hover:underline">
+                            {task.client.name}
+                            {task.client.agency && ` · agencja ${task.client.agency.name}`}
+                        </Link>
+                    )}
                     <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-start gap-1 text-left">
                         <span className={cn('flex-1 text-sm font-medium', (done || skipped) && 'text-muted-foreground line-through')}>
+                            {task.source === 'request' && (
+                                <Inbox className="mr-1 inline size-3.5 align-[-2px] text-[#2a78d6]" aria-label="zgłoszenie" />
+                            )}
                             {task.title}
                         </span>
                         {(task.description || task.note || done) && (
@@ -220,9 +245,20 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                                 <MessageSquare className="size-3" /> notatka
                             </span>
                         )}
+                        {running && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-[#2a78d6]">
+                                <Timer className="size-3 animate-pulse" /> {elapsed(task.timer_started_at!, now)}
+                            </span>
+                        )}
                         {!!task.minutes && (
                             <span className="text-muted-foreground inline-flex items-center gap-1">
                                 <Timer className="size-3" /> {formatMinutes(task.minutes)}
+                            </span>
+                        )}
+                        {task.source === 'request' && task.requester?.name && (
+                            <span className="text-muted-foreground">
+                                zgłosił(a): {task.requester.name}
+                                {task.requester.agency ? ` (${task.requester.agency})` : ''}
                             </span>
                         )}
                         {isAdmin && !!task.amount && (
@@ -248,6 +284,30 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                     {open && (
                         <div className="mt-2 space-y-2">
                             {task.description && <p className="text-muted-foreground text-sm whitespace-pre-line">{task.description}</p>}
+                            {task.source === 'request' && task.requester && (
+                                <p className="text-muted-foreground text-xs">
+                                    Zgłoszenie od {task.requester.name ?? '—'}
+                                    {task.requester.email && (
+                                        <>
+                                            {' · '}
+                                            <a
+                                                href={`mailto:${task.requester.email}?subject=${encodeURIComponent('Re: ' + task.title)}`}
+                                                className="underline"
+                                            >
+                                                {task.requester.email}
+                                            </a>
+                                        </>
+                                    )}
+                                    {task.requester.phone && (
+                                        <>
+                                            {' · '}
+                                            <a href={`tel:${task.requester.phone.replace(/\s/g, '')}`} className="underline">
+                                                {task.requester.phone}
+                                            </a>
+                                        </>
+                                    )}
+                                </p>
+                            )}
                             <textarea
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
@@ -269,6 +329,16 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                     ) : (
                         !done && (
                             <>
+                                <Button
+                                    variant={running ? 'outline' : 'ghost'}
+                                    size="sm"
+                                    title={running ? 'Zatrzymaj stoper i dolicz czas' : 'Włącz stoper'}
+                                    onClick={() =>
+                                        router.post(`/care/tasks/${task.id}/timer/${running ? 'stop' : 'start'}`, {}, { preserveScroll: true })
+                                    }
+                                >
+                                    {running ? <Square className="size-4 fill-current text-[#2a78d6]" /> : <Play className="size-4" />}
+                                </Button>
                                 <Button variant="ghost" size="sm" title="Zmień termin" onClick={() => setEditDate(!editDate)}>
                                     <CalendarClock className="size-4" />
                                 </Button>

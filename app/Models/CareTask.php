@@ -9,9 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /** Zadanie opieki w konkretnym miesiącu (z planu albo jednorazowe). */
 class CareTask extends Model
 {
-    protected $fillable = ['client_id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes', 'amount', 'invoiced_at'];
+    protected $fillable = ['client_id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes', 'amount', 'invoiced_at',
+        'timer_started_at', 'source', 'requester', 'invoice_id'];
 
-    protected $casts = ['done_at' => 'datetime', 'invoiced_at' => 'datetime', 'amount' => 'float'];
+    protected $casts = ['done_at' => 'datetime', 'invoiced_at' => 'datetime', 'amount' => 'float', 'timer_started_at' => 'datetime', 'requester' => 'array'];
+
+    /** Kolumny zadań na listach (w tym stoper i dane zgłaszającego). */
+    public const LIST_COLUMNS = ['id', 'client_id', 'care_template_id', 'source', 'period', 'title', 'description', 'requester', 'due_date', 'status',
+        'done_at', 'done_by', 'note', 'minutes', 'timer_started_at', 'amount', 'invoiced_at'];
 
     public function client(): BelongsTo
     {

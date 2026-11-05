@@ -64,14 +64,14 @@ export default function Billing({
 
                 <Section
                     title="Abonamenty do zafakturowania w tym miesiącu"
-                    description="Po wystawieniu faktury kliknij „Rozliczono” – termin przesunie się o okres."
+                    description="„Wystaw fakturę” tworzy fakturę w Fakturowni i sam przesuwa termin. Bez Fakturowni: po wystawieniu kliknij „Rozliczono”."
                 >
                     {toInvoice.length === 0 ? (
                         <EmptyState title="Brak abonamentów do zafakturowania w tym miesiącu" />
                     ) : (
                         <ul className="divide-y">
                             {toInvoice.map((i) => (
-                                <BillingRow key={i.id} item={i} types={types} periods={periods} showClient />
+                                <BillingRow key={i.id} item={i} types={types} periods={periods} showClient invoice />
                             ))}
                         </ul>
                     )}

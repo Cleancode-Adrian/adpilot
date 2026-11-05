@@ -1,4 +1,6 @@
 import { ClientCard, type ClientRow } from '@/components/adpilot/client-card';
+import { CopyLink } from '@/components/adpilot/copy-link';
+import { InvoiceButton } from '@/components/adpilot/invoice-dialog';
 import { EmptyState, NativeSelect, Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -57,6 +59,7 @@ export default function AgencyShow({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {admin && <InvoiceButton agencyId={agency.id} currency={agency.currency} size="default" />}
                         {admin && (
                             <Button variant="outline" size="sm" asChild>
                                 <Link href={`/agencies/${agency.id}/settlement`}>
@@ -144,6 +147,14 @@ export default function AgencyShow({
                     <Section title="Notatki">
                         <p className="text-sm whitespace-pre-line">{agency.notes || <span className="text-muted-foreground">Brak notatek.</span>}</p>
                     </Section>
+                    {agency.request_url && (
+                        <Section
+                            title="Formularz zgłoszeń"
+                            description="Wyślij agencji – wybiera stronę ze swojej listy, a zgłoszenie trafia do Ciebie jako zadanie."
+                        >
+                            <CopyLink url={agency.request_url} />
+                        </Section>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap items-end justify-between gap-3 pt-2">

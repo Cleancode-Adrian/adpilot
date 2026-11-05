@@ -35,6 +35,12 @@ export default function ClientForm({
         contact_name: client?.contact_name ?? '',
         contact_email: client?.contact_email ?? '',
         contact_phone: client?.contact_phone ?? '',
+        billing_name: client?.billing?.billing_name ?? (client as unknown as Record<string, string | null>)?.billing_name ?? '',
+        tax_id: client?.billing?.tax_id ?? (client as unknown as Record<string, string | null>)?.tax_id ?? '',
+        billing_street: client?.billing?.billing_street ?? (client as unknown as Record<string, string | null>)?.billing_street ?? '',
+        billing_post_code: client?.billing?.billing_post_code ?? (client as unknown as Record<string, string | null>)?.billing_post_code ?? '',
+        billing_city: client?.billing?.billing_city ?? (client as unknown as Record<string, string | null>)?.billing_city ?? '',
+        billing_email: client?.billing?.billing_email ?? (client as unknown as Record<string, string | null>)?.billing_email ?? '',
         has_general: client?.has_general ?? true,
         has_care: client?.has_care ?? false,
         has_ads: client?.has_ads ?? false,
@@ -190,6 +196,23 @@ export default function ClientForm({
                         {field('contact_phone', 'Telefon', { type: 'tel', placeholder: '600 000 000' })}
                     </div>
                 </div>
+
+                <details className="rounded-xl border p-4" open={!!(data.billing_name || data.tax_id)}>
+                    <summary className="cursor-pointer font-medium">Dane do faktury</summary>
+                    <p className="text-muted-foreground mt-1 mb-4 text-sm">
+                        Używane przy wystawianiu faktur w Fakturowni. Puste pola = nazwa i e-mail kontaktowy.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {field('billing_name', 'Pełna nazwa firmy', { placeholder: 'np. Zielony Ogród Anna Nowak' })}
+                        {field('tax_id', 'NIP', { placeholder: '0000000000' })}
+                        {field('billing_street', 'Ulica i numer', { placeholder: 'ul. Kwiatowa 5' })}
+                        <div className="grid grid-cols-[8rem_1fr] gap-2">
+                            {field('billing_post_code', 'Kod', { placeholder: '00-001' })}
+                            {field('billing_city', 'Miasto', { placeholder: 'Warszawa' })}
+                        </div>
+                        {field('billing_email', 'E-mail do faktur', { type: 'email', placeholder: 'faktury@firma.pl' })}
+                    </div>
+                </details>
 
                 <div className="rounded-xl border p-4">
                     <h2 className="mb-1 font-medium">Usługi</h2>

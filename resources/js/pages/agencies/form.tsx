@@ -13,6 +13,12 @@ export interface AgencyProps {
     name: string;
     website_url: string | null;
     tax_id: string | null;
+    billing_name?: string | null;
+    billing_street?: string | null;
+    billing_post_code?: string | null;
+    billing_city?: string | null;
+    billing_email?: string | null;
+    request_url?: string;
     contact_name: string | null;
     contact_email: string | null;
     contact_phone: string | null;
@@ -34,6 +40,11 @@ export default function AgencyForm({ agency }: { agency: AgencyProps | null }) {
         name: agency?.name ?? '',
         website_url: agency?.website_url ?? '',
         tax_id: agency?.tax_id ?? '',
+        billing_name: agency?.billing_name ?? '',
+        billing_street: agency?.billing_street ?? '',
+        billing_post_code: agency?.billing_post_code ?? '',
+        billing_city: agency?.billing_city ?? '',
+        billing_email: agency?.billing_email ?? '',
         contact_name: agency?.contact_name ?? '',
         contact_email: agency?.contact_email ?? '',
         contact_phone: agency?.contact_phone ?? '',
@@ -100,6 +111,22 @@ export default function AgencyForm({ agency }: { agency: AgencyProps | null }) {
                         {field('tax_id', 'NIP', { placeholder: '0000000000' })}
                     </div>
                 </div>
+
+                <details className="rounded-xl border p-4" open={!!(agency?.billing_name || agency?.billing_street)}>
+                    <summary className="cursor-pointer font-medium">Dane do faktury</summary>
+                    <p className="text-muted-foreground mt-1 mb-4 text-sm">
+                        Używane przy wystawianiu faktur w Fakturowni. Puste pola = nazwa i e-mail kontaktowy.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {field('billing_name', 'Pełna nazwa firmy', { placeholder: 'np. Zielony Ogród Anna Nowak' })}
+                        {field('billing_street', 'Ulica i numer', { placeholder: 'ul. Kwiatowa 5' })}
+                        <div className="grid grid-cols-[8rem_1fr] gap-2">
+                            {field('billing_post_code', 'Kod', { placeholder: '00-001' })}
+                            {field('billing_city', 'Miasto', { placeholder: 'Warszawa' })}
+                        </div>
+                        {field('billing_email', 'E-mail do faktur', { type: 'email', placeholder: 'faktury@firma.pl' })}
+                    </div>
+                </details>
 
                 <div className="rounded-xl border p-4">
                     <h2 className="mb-4 font-medium">Osoba kontaktowa</h2>

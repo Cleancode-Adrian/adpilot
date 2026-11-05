@@ -14,6 +14,15 @@ export interface ClientProps {
     id: number;
     agency_id: number | null;
     agency: { id: number; name: string; white_label: boolean } | null;
+    request_url: string;
+    billing: {
+        billing_name: string | null;
+        tax_id: string | null;
+        billing_street: string | null;
+        billing_post_code: string | null;
+        billing_city: string | null;
+        billing_email: string | null;
+    };
     name: string;
     website_url: string;
     has_ads: boolean;
@@ -75,6 +84,11 @@ export interface CareTask {
     amount?: number | null;
     invoiced_at?: string | null;
     done_by?: { id: number; name: string } | null;
+    timer_started_at?: string | null;
+    /** request = zgłoszenie z formularza klienta / agencji */
+    source?: string | null;
+    requester?: { name?: string; email?: string; phone?: string; agency?: string; at?: string } | null;
+    client?: { id: number; name: string; agency?: { id: number; name: string } | null } | null;
 }
 
 export interface CareTemplate {

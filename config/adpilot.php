@@ -13,6 +13,7 @@ return [
         'scopes' => [
             'https://www.googleapis.com/auth/adwords',
             'https://www.googleapis.com/auth/analytics.readonly',
+            'https://www.googleapis.com/auth/webmasters.readonly', // Search Console (zakładka SEO)
             'openid',
             'email',
         ],

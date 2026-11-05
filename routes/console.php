@@ -2,19 +2,34 @@
 
 use App\Jobs\GenerateReportJob;
 use App\Jobs\HeartbeatJob;
+use App\Jobs\PullWpSiteJob;
+use App\Jobs\RunSiteAuditJob;
 use App\Jobs\RunTrackingAuditJob;
 use App\Jobs\SyncClientJob;
+use App\Jobs\SyncSearchConsoleJob;
+use App\Jobs\UptimeCheckJob;
 use App\Mail\DailyDigestMail;
+use App\Models\CareTask;
 use App\Models\Client;
 use App\Models\Recommendation;
+use App\Models\SiteMonitor;
 use App\Models\User;
+use App\Models\WpEvent;
+use App\Models\WpSite;
+use App\Services\Billing\BillingService;
+use App\Services\Care\CarePlanner;
 use App\Services\ClientSync;
 use App\Services\Demo\DemoDataGenerator;
+use App\Services\Monitoring\UptimeMonitor;
+use App\Services\Sales\Followups;
+use App\Services\SiteAudit\SiteAuditor;
 use App\Services\SystemStatus;
+use App\Services\WordPress\WpMonitor;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Str;
 
@@ -73,27 +88,29 @@ Artisan::command('adpilot:digest {--force : wyślij nawet gdy nie ma nic pilnego
     }
 
     // Opieka: zaległe, na dziś i w ciągu 3 dni
-    app(\App\Services\Care\CarePlanner::class)->ensureAll();
-    $care = \App\Models\CareTask::due(now()->addDays(3)->toDateString())->whereHas('client', fn ($q) => $q->active())
+    app(CarePlanner::class)->ensureAll();
+    $care = CareTask::due(now()->addDays(3)->toDateString())->whereHas('client', fn ($q) => $q->active())
         ->with('client:id,name')->orderBy('due_date')->get()->groupBy('client_id')->map(fn ($items) => [
             'id' => $items->first()->client_id,
             'name' => $items->first()->client->name,
             'items' => $items->map(fn ($t) => ['title' => $t->title, 'due_date' => $t->due_date, 'overdue' => $t->due_date < now()->toDateString()])->values()->all(),
         ])->values()->all();
 
-    $wp = \App\Models\WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->latest('occurred_at')->get()
+    $wp = WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->latest('occurred_at')->get()
         ->groupBy('client_id')->map(fn ($items) => ['id' => $items->first()->client_id, 'name' => $items->first()->client->name,
             'items' => $items->take(6)->map(fn ($e) => ['severity' => $e->severity, 'title' => $e->title])->values()->all()])->values()->all();
 
-    $sites = \App\Models\SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->get()
+    $sites = SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->with('client:id,name')->get()
         ->filter(fn ($m) => $m->status === 'down' || (($d = $m->sslDaysLeft()) !== null && $d <= 14))
         ->map(fn ($m) => ['id' => $m->client_id, 'name' => $m->client->name, 'text' => $m->status === 'down' ? 'strona nie działa od '.$m->down_since?->format('d.m H:i') : 'certyfikat SSL wygasa za '.$m->sslDaysLeft().' dni'])->values()->all();
 
-    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care, 'wp' => $wp, 'sites' => $sites,
-        'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)
-            + \App\Models\CareTask::due(now()->subDay()->toDateString())->whereHas('client', fn ($q) => $q->active())->count()];
+    $followups = app(Followups::class)->due()->map(fn ($f) => Arr::only($f, ['who', 'title', 'since']))->all();
 
-    if (! $clients && ! $problems && ! $care && ! $wp && ! $sites && ! $this->option('force')) {
+    $digest = ['clients' => $clients, 'integrationProblems' => $problems, 'care' => $care, 'wp' => $wp, 'sites' => $sites, 'followups' => $followups,
+        'urgent_count' => $recs->where('severity', 'critical')->count() + count($problems)
+            + CareTask::due(now()->subDay()->toDateString())->whereHas('client', fn ($q) => $q->active())->count()];
+
+    if (! $clients && ! $problems && ! $care && ! $wp && ! $sites && ! $followups && ! $this->option('force')) {
         $this->info('Nic pilnego – nie wysyłam.');
 
         return;
@@ -119,7 +136,7 @@ Artisan::command('adpilot:backup {--keep=14}', function () {
         $cmd = sprintf('mysqldump --single-transaction --quick --no-tablespaces -h %s -P %s -u %s %s | gzip > %s',
             escapeshellarg($cfg['host']), escapeshellarg((string) $cfg['port']), escapeshellarg($cfg['username']),
             escapeshellarg($cfg['database']), escapeshellarg($file));
-        $result = \Illuminate\Support\Facades\Process::env(['MYSQL_PWD' => (string) $cfg['password']])->run($cmd);
+        $result = Process::env(['MYSQL_PWD' => (string) $cfg['password']])->run($cmd);
         if ($result->failed() || ! filesize($file)) {
             $this->error('Kopia nie powiodła się: '.$result->errorOutput());
 
@@ -151,19 +168,24 @@ Schedule::call(function () {
         ->each(fn ($c) => RunTrackingAuditJob::dispatch($c->audits()->create(['url' => $c->website_url])));
 })->weeklyOn(1, '04:00')->name('adpilot-weekly-audit');
 
-Schedule::call(fn () => app(\App\Services\Care\CarePlanner::class)->ensureAll())->dailyAt('00:15')->name('adpilot-care-plan');
+Schedule::call(fn () => app(CarePlanner::class)->ensureAll())->dailyAt('00:15')->name('adpilot-care-plan');
 // WordPress: codzienne odpytanie stron (raport + skan plików) i kontrola braku kontaktu
-Schedule::call(fn () => \App\Models\WpSite::where('status', 'connected')->whereHas('client', fn ($q) => $q->active())->get()
-    ->each(fn ($s) => \App\Jobs\PullWpSiteJob::dispatch($s, true)))->dailyAt('06:40')->name('adpilot-wp-pull');
-Schedule::call(fn () => app(\App\Services\WordPress\WpMonitor::class)->checkOffline())->hourly()->name('adpilot-wp-offline');
+Schedule::call(fn () => WpSite::where('status', 'connected')->whereHas('client', fn ($q) => $q->active())->get()
+    ->each(fn ($s) => PullWpSiteJob::dispatch($s, true)))->dailyAt('06:40')->name('adpilot-wp-pull');
+Schedule::call(fn () => app(WpMonitor::class)->checkOffline())->hourly()->name('adpilot-wp-offline');
 // Dostępność stron co 5 min, certyfikaty SSL raz dziennie, audyt stron z opieką raz w miesiącu
-Schedule::job(new \App\Jobs\UptimeCheckJob)->everyFiveMinutes()->name('adpilot-uptime');
-Schedule::call(fn () => \App\Models\SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->get()
-    ->each(fn ($m) => app(\App\Services\Monitoring\UptimeMonitor::class)->checkSsl($m)))->dailyAt('07:10')->name('adpilot-ssl');
+Schedule::job(new UptimeCheckJob)->everyFiveMinutes()->name('adpilot-uptime');
+Schedule::call(fn () => SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->get()
+    ->each(fn ($m) => app(UptimeMonitor::class)->checkSsl($m)))->dailyAt('07:10')->name('adpilot-ssl');
 Schedule::call(fn () => Client::active()->where('is_demo', false)->where('has_care', true)->get()
-    ->each(fn ($c) => \App\Jobs\RunSiteAuditJob::dispatch(app(\App\Services\SiteAudit\SiteAuditor::class)->start($c))))->monthlyOn(1, '03:30')->name('adpilot-site-audits');
+    ->each(fn ($c) => RunSiteAuditJob::dispatch(app(SiteAuditor::class)->start($c))))->monthlyOn(1, '03:30')->name('adpilot-site-audits');
 // Rozliczenia: przypomnienia o fakturach i odnowieniach (zadania u klienta + e-mail)
-Schedule::call(fn () => app(\App\Services\Billing\BillingService::class)->remind())->dailyAt('07:20')->name('adpilot-billing');
+Schedule::call(fn () => app(BillingService::class)->remind())->dailyAt('07:20')->name('adpilot-billing');
+// Search Console: klienci bez reklam (klienci z reklamami synchronizują się razem z kampaniami o 05:30)
+Schedule::call(fn () => Client::active()->where('has_ads', false)->where('is_demo', false)
+    ->whereHas('integrations', fn ($q) => $q->where('provider', 'google'))->with('integrations')->get()
+    ->filter(fn ($c) => $c->integration('google')?->setting('gsc_site'))
+    ->each(fn ($c) => SyncSearchConsoleJob::dispatch($c)))->dailyAt('06:10')->name('adpilot-gsc');
 Schedule::command('adpilot:digest')->dailyAt('08:00');
 Schedule::command('adpilot:backup')->dailyAt('03:00');
 Schedule::command('adpilot:monthly-reports')->monthlyOn(2, '07:00');

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ReportReadyMail;
 use App\Models\CareTask;
 use App\Models\CareTemplate;
 use App\Models\Client;
@@ -12,6 +13,7 @@ use App\Services\Care\CarePlanner;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class ClientCareTest extends TestCase
@@ -180,7 +182,7 @@ class ClientCareTest extends TestCase
             ->has('upcoming', 1)
             ->where('adsKpis', null));
 
-        $this->get('/')->assertRedirect('/clients');
+        $this->get('/')->assertRedirect('/today');
     }
 
     public function test_panel_login_and_password_from_client_form_go_to_encrypted_vault(): void
@@ -300,9 +302,9 @@ class ClientCareTest extends TestCase
         $this->get("/r/{$client->report_token}/{$report->id}/pdf")->assertOk();
         $this->get("/r/zly-token/{$report->id}")->assertNotFound();
 
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
         $this->post("/reports/{$report->id}/send")->assertSessionHas('success');
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ReportReadyMail::class, fn ($m) => str_contains($m->envelope()->subject, 'Raport z prac'));
+        Mail::assertSent(ReportReadyMail::class, fn ($m) => str_contains($m->envelope()->subject, 'Raport z prac'));
         $this->assertNotNull($report->fresh()->sent_at);
     }
 }

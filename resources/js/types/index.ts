@@ -30,6 +30,9 @@ export interface SharedData {
     /** stawka VAT w % do kwot brutto; null = zwolniony z VAT */
     vat_rate: number | null;
     admin: { problems: number } | null;
+    /** działający stoper przy zadaniu */
+    timer: { id: number; title: string; minutes: number; started_at: string; client: { id: number; name: string } | null } | null;
+    requests_new: number;
     care_due: number;
     wp_alerts: number;
     sites_down: number;

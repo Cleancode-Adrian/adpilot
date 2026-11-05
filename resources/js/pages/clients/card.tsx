@@ -1,4 +1,5 @@
 import { CareProgress, CareTaskRow, formatMinutes, localDate } from '@/components/adpilot/care-task-row';
+import { CopyLink } from '@/components/adpilot/copy-link';
 import { NetGross, Section } from '@/components/adpilot/ui';
 import { CopyButton, SecretValue } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
@@ -365,6 +366,9 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                                 </Link>
                             )}
                         </div>
+                    </Section>
+                    <Section title="Formularz zgłoszeń" description="Wyślij klientowi – zgłoszenia trafią do Ciebie jako zadania z terminem.">
+                        <CopyLink url={client.request_url} />
                     </Section>
                     <p className="text-muted-foreground flex items-center gap-1 text-xs">
                         <Check className="size-3" /> Notatki zapisują się same po kliknięciu poza polem.

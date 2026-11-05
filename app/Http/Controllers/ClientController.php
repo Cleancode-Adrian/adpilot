@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\SyncClientJob;
 use App\Models\Agency;
+use App\Models\CareTask;
 use App\Models\Client;
 use App\Models\ClientCredential;
 use App\Services\Analysis\Metrics;
@@ -125,8 +126,8 @@ class ClientController extends Controller
 
         return Inertia::render('clients/card', [
             'client' => $this->clientProps($client),
-            'upcoming' => $client->careTasks()->todo()->where('period', '<=', $period)->orderBy('due_date')->limit(8)
-                ->get(['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note', 'minutes', 'amount', 'invoiced_at']),
+            'upcoming' => $client->careTasks()->with('doneBy:id,name')->todo()->where('period', '<=', $period)->orderBy('due_date')->limit(8)
+                ->get(CareTask::LIST_COLUMNS),
             'adsKpis' => $client->has_ads ? (new Metrics($client))->kpis(CarbonImmutable::yesterday()->subDays(29), CarbonImmutable::yesterday()) : null,
         ]);
     }
@@ -203,6 +204,8 @@ class ClientController extends Controller
         return [
             ...$client->only(['id', 'agency_id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
             'agency' => $client->agency?->only(['id', 'name', 'white_label']),
+            'request_url' => $client->requestUrl(),
+            'billing' => $client->only(['billing_name', 'tax_id', 'billing_street', 'billing_post_code', 'billing_city', 'billing_email']),
             'open_count' => $client->recommendations()->open()->count(),
             'integrations' => $client->integrations->map->only(['id', 'provider', 'status', 'settings', 'last_synced_at', 'last_error']),
             'lead_event_names' => $client->leadEventNames(),
@@ -290,6 +293,12 @@ class ClientController extends Controller
             'monthly_budget' => 'nullable|numeric|min:0',
             'daily_budget' => 'nullable|numeric|min:0',
             'contact_email' => 'nullable|email',
+            'billing_name' => 'nullable|string|max:255',
+            'tax_id' => 'nullable|string|max:20',
+            'billing_street' => 'nullable|string|max:255',
+            'billing_post_code' => 'nullable|string|max:12',
+            'billing_city' => 'nullable|string|max:100',
+            'billing_email' => 'nullable|email|max:255',
             'auto_send_reports' => 'boolean',
             'notes' => 'nullable|string|max:20000',
         ]);

@@ -9,38 +9,45 @@ import {
     Building2,
     FileSignature,
     Handshake,
+    Inbox,
     ListChecks,
     Palette,
-    PlusCircle,
+    PiggyBank,
+    Receipt,
     ScanSearch,
     ShieldCheck,
+    Sun,
     UsersRound,
     Wallet,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
-    const { admin, care_due, wp_alerts, sites_down } = usePage<SharedData>().props;
+    const { admin, care_due, wp_alerts, sites_down, requests_new } = usePage<SharedData>().props;
 
-    // 1) Klienci – dane, logowanie, notatki, zadania  2) Reklamy – wyniki i zadania reklamowe
-    const clientItems: NavItem[] = [
-        { title: 'Wszyscy klienci', url: '/clients', icon: Building2, badge: (wp_alerts ?? 0) + (sites_down ?? 0) },
+    // Menu w grupach wg rodzaju pracy: start → praca dla klientów → sprzedaż → finanse → reklamy → administracja
+    const start: NavItem[] = [{ title: 'Dziś', url: '/today', icon: Sun, badge: (sites_down ?? 0) + (requests_new ?? 0) }];
+    const work: NavItem[] = [
+        { title: 'Klienci', url: '/clients', icon: Building2, badge: wp_alerts },
         { title: 'Agencje', url: '/agencies', icon: Handshake },
         { title: 'Zadania i opieka', url: '/care', icon: ShieldCheck, badge: care_due },
-        { title: 'Audyt dowolnej strony', url: '/audits', icon: ScanSearch },
-        ...(admin
-            ? [
-                  { title: 'Oferty', url: '/quotes', icon: FileSignature },
-                  { title: 'Rozliczenia', url: '/billing', icon: Wallet },
-              ]
-            : []),
-        { title: 'Nowy klient', url: '/clients/create', icon: PlusCircle },
+        { title: 'Zgłoszenia', url: '/requests', icon: Inbox, badge: requests_new },
     ];
-    const adsItems: NavItem[] = [
+    const sales: NavItem[] = [
+        { title: 'Audyt strony', url: '/audits', icon: ScanSearch },
+        ...(admin ? [{ title: 'Oferty', url: '/quotes', icon: FileSignature }] : []),
+    ];
+    const finance: NavItem[] = admin
+        ? [
+              { title: 'Rozliczenia', url: '/billing', icon: Wallet },
+              { title: 'Faktury', url: '/invoices', icon: Receipt },
+              { title: 'Rentowność', url: '/profitability', icon: PiggyBank },
+          ]
+        : [];
+    const ads: NavItem[] = [
         { title: 'Wyniki reklam', url: '/dashboard', icon: BarChart3 },
         { title: 'Zadania reklamowe', url: '/tasks', icon: ListChecks },
     ];
-
     const adminItems: NavItem[] = admin
         ? [
               { title: 'Status systemu', url: '/admin/status', icon: Activity, badge: admin.problems },
@@ -55,7 +62,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href="/clients" prefetch>
+                            <Link href="/today" prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -64,8 +71,11 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={clientItems} label="Klienci" />
-                <NavMain items={adsItems} label="Reklamy" />
+                <NavMain items={start} label="" />
+                <NavMain items={work} label="Praca" />
+                <NavMain items={sales} label="Sprzedaż" />
+                {admin && <NavMain items={finance} label="Finanse" />}
+                <NavMain items={ads} label="Reklamy" />
                 {admin && <NavMain items={adminItems} label="Administracja" />}
             </SidebarContent>
 

@@ -12,12 +12,12 @@ class Quote extends Model
 {
     public const STATUSES = ['draft' => 'Szkic', 'sent' => 'Wysłana', 'accepted' => 'Zaakceptowana', 'rejected' => 'Odrzucona'];
 
-    protected $fillable = ['client_id', 'number', 'title', 'intro', 'terms', 'status', 'valid_until', 'currency', 'vat_rate', 'token',
+    protected $fillable = ['client_id', 'number', 'title', 'intro', 'terms', 'status', 'valid_until', 'currency', 'vat_rate', 'token', 'followup_at', 'followup_off',
         'sent_at', 'viewed_at', 'decided_at', 'decided_name', 'decided_ip', 'rejection_reason', 'created_by'];
 
     protected $hidden = ['token'];
 
-    protected $casts = ['vat_rate' => 'float', 'sent_at' => 'datetime', 'viewed_at' => 'datetime', 'decided_at' => 'datetime'];
+    protected $casts = ['vat_rate' => 'float', 'followup_at' => 'datetime', 'followup_off' => 'boolean', 'sent_at' => 'datetime', 'viewed_at' => 'datetime', 'decided_at' => 'datetime'];
 
     public static function nextNumber(): string
     {

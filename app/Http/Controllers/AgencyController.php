@@ -61,6 +61,8 @@ class AgencyController extends Controller
             'agency' => [
                 ...$agency->only(['id', 'name', 'website_url', 'tax_id', 'contact_name', 'contact_email', 'contact_phone', 'white_label', 'brand_color', 'report_footer', 'terms', 'notes', 'archived_at']),
                 'logo_url' => $agency->logoUrl(),
+                'request_url' => $agency->requestUrl(),
+                'billing' => $agency->only(['billing_name', 'billing_street', 'billing_post_code', 'billing_city', 'billing_email']),
                 // stawka tylko dla administratora (ceny)
                 'hourly_rate' => $request->user()->is_admin ? $agency->hourly_rate : null,
                 'currency' => $agency->currency,
@@ -179,6 +181,11 @@ class AgencyController extends Controller
             'name' => 'required|string|max:150',
             'website_url' => 'nullable|string|max:255',
             'tax_id' => 'nullable|string|max:20',
+            'billing_name' => 'nullable|string|max:255',
+            'billing_street' => 'nullable|string|max:255',
+            'billing_post_code' => 'nullable|string|max:12',
+            'billing_city' => 'nullable|string|max:100',
+            'billing_email' => 'nullable|email|max:255',
             'contact_name' => 'nullable|string|max:150',
             'contact_email' => 'nullable|email|max:255',
             'contact_phone' => 'nullable|string|max:50',

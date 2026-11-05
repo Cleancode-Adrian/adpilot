@@ -7,14 +7,15 @@ use App\Models\Client;
 use App\Models\Integration;
 use App\Models\Setting;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
 use App\Services\Analysis\RuleEngine;
 use App\Services\Connectors\Ga4Connector;
 use App\Services\Connectors\GoogleAdsConnector;
 use App\Services\Connectors\MetaConnector;
 use App\Services\Connectors\MetricsWriter;
+use App\Services\Connectors\SearchConsoleConnector;
 use App\Services\Demo\DemoDataGenerator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /** Pobiera dane ze wszystkich podłączonych źródeł, a potem uruchamia silnik reguł. */
@@ -58,6 +59,10 @@ class ClientSync
                         if ($integration->setting('ga4_property_id')) {
                             $this->ga4->sync($integration, $writer, $from, $to);
                             $log[] = 'GA4: OK';
+                        }
+                        if (! $quick && $integration->setting('gsc_site')) {
+                            app(SearchConsoleConnector::class)->sync($client);
+                            $log[] = 'Search Console: OK';
                         }
                     } elseif ($integration->provider === 'meta') {
                         $this->meta->sync($integration, $writer, $from, $to);

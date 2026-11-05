@@ -54,6 +54,11 @@ class HandleInertiaRequests extends Middleware
             'brand' => fn () => Setting::brand(),
             // stawka VAT do pokazywania kwot brutto obok netto (null = zwolniony z VAT)
             'vat_rate' => fn () => Setting::vatRate(),
+            // działający stoper (pasek u góry) i nowe zgłoszenia od klientów (znaczek w menu)
+            'timer' => fn () => $request->user() && ($t = CareTask::whereNotNull('timer_started_at')->with('client:id,name')->first(['id', 'client_id', 'title', 'minutes', 'timer_started_at']))
+                ? ['id' => $t->id, 'title' => $t->title, 'minutes' => (int) $t->minutes, 'started_at' => $t->timer_started_at->toIso8601String(), 'client' => $t->client?->only(['id', 'name'])]
+                : null,
+            'requests_new' => fn () => $request->user() ? CareTask::todo()->where('source', 'request')->whereHas('client', fn ($q) => $q->active())->count() : 0,
             // Licznik w menu „Opieka”: zadania po terminie i na dziś (aktywni klienci)
             'care_due' => fn () => $request->user() ? CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             // Alerty WordPress do sprawdzenia (krytyczne i ostrzeżenia) – znaczek przy „Wszyscy klienci”

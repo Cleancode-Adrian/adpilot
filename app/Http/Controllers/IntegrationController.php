@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\SyncClientJob;
+use App\Jobs\SyncSearchConsoleJob;
 use App\Models\Client;
 use App\Models\Integration;
 use App\Services\Connectors\Ga4Connector;
 use App\Services\Connectors\GoogleAdsConnector;
 use App\Services\Connectors\GoogleAuth;
 use App\Services\Connectors\MetaConnector;
+use App\Services\Connectors\SearchConsoleConnector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -33,18 +35,21 @@ class IntegrationController extends Controller
 
     // ---------------------------------------------------------------- Google
 
-    public function googleRedirect(Client $client, GoogleAuth $auth)
+    public function googleRedirect(Request $request, Client $client, GoogleAuth $auth)
     {
         abort_unless(GoogleAuth::configured(), 400, 'Brak GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET w .env');
+        // powrót po połączeniu: zakładka SEO albo integracje reklam
+        session(['oauth_google_back' => $request->input('back') === 'seo' ? 'seo' : 'integrations']);
 
         return redirect()->away($auth->authUrl($this->state($client, 'google')));
     }
 
-    public function googleCallback(Request $request, GoogleAuth $auth, GoogleAdsConnector $ads, Ga4Connector $ga4)
+    public function googleCallback(Request $request, GoogleAuth $auth, GoogleAdsConnector $ads, Ga4Connector $ga4, SearchConsoleConnector $gsc)
     {
         $client = $this->clientFromState($request, 'google');
+        $back = session()->pull('oauth_google_back') === 'seo' ? 'clients.seo' : 'clients.integrations';
         if ($request->filled('error')) {
-            return redirect()->route('clients.integrations', $client)->with('error', 'Google: '.$request->input('error'));
+            return redirect()->route($back, $client)->with('error', 'Google: '.$request->input('error'));
         }
 
         try {
@@ -57,7 +62,7 @@ class IntegrationController extends Controller
                 'last_error' => null,
             ]);
 
-            $accounts = ['google_ads' => [], 'ga4' => []];
+            $accounts = ['google_ads' => [], 'ga4' => [], 'gsc' => []];
             $errors = [];
             try {
                 $accounts['google_ads'] = $ads->listAccounts($integration);
@@ -69,12 +74,19 @@ class IntegrationController extends Controller
             } catch (Throwable $e) {
                 $errors[] = $e->getMessage();
             }
+            try {
+                $accounts['gsc'] = $gsc->listSites($integration);
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+            }
             $integration->update(['available_accounts' => $accounts, 'last_error' => $errors ? implode(' | ', $errors) : null]);
         } catch (Throwable $e) {
-            return redirect()->route('clients.integrations', $client)->with('error', $e->getMessage());
+            return redirect()->route($back, $client)->with('error', $e->getMessage());
         }
 
-        return redirect()->route('clients.integrations', $client)->with('success', 'Połączono z Google – wybierz konto Google Ads i usługę GA4.');
+        return redirect()->route($back, $client)->with('success', $back === 'clients.seo'
+            ? 'Połączono z Google – wybierz witrynę z Search Console.'
+            : 'Połączono z Google – wybierz konto Google Ads i usługę GA4.');
     }
 
     // ---------------------------------------------------------------- Meta
@@ -118,13 +130,18 @@ class IntegrationController extends Controller
             'customer_id' => 'nullable|string|max:20',
             'login_customer_id' => 'nullable|string|max:20',
             'ga4_property_id' => 'nullable|string|max:20',
+            'gsc_site' => 'nullable|string|max:255',
             'ad_account_id' => 'nullable|string|max:40',
         ]);
         $settings = array_filter(array_merge($integration->settings ?? [], $data), fn ($v) => $v !== null && $v !== '');
-        $ready = $provider === 'google' ? (! empty($settings['customer_id']) || ! empty($settings['ga4_property_id'])) : ! empty($settings['ad_account_id']);
+        $ready = $provider === 'google'
+            ? (! empty($settings['customer_id']) || ! empty($settings['ga4_property_id']) || ! empty($settings['gsc_site']))
+            : ! empty($settings['ad_account_id']);
 
         $integration->update(['settings' => $settings, 'status' => $ready ? 'connected' : 'pending']);
-        if ($ready) {
+        if ($ready && ($request->has('gsc_site') && ! $request->hasAny(['customer_id', 'ga4_property_id']))) {
+            SyncSearchConsoleJob::dispatch($client); // tylko Search Console – bez pełnej synchronizacji reklam
+        } elseif ($ready) {
             SyncClientJob::dispatch($client);
         }
 

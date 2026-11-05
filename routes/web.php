@@ -8,18 +8,24 @@ use App\Http\Controllers\CareController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\RecommendationController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\RequestFormController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SeoController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\TodayController;
 use App\Http\Controllers\VaultController;
 use App\Http\Controllers\WebAuditController;
 use App\Http\Controllers\WordPressController;
+use App\Http\Controllers\WorkController;
 use Illuminate\Support\Facades\Route;
 
 // Strona główna → logowanie / panel (strona ofertowa agencji jest osobno)
-Route::get('/', fn () => redirect()->route(auth()->check() ? 'clients.index' : 'login'))->name('home');
+Route::get('/', fn () => redirect()->route(auth()->check() ? 'today' : 'login'))->name('home');
 
 // Publiczny raport dla klienta (link z tokenem, bez logowania)
 Route::get('r/{token}/{report}', [ReportController::class, 'public'])->name('public.report');
@@ -30,12 +36,27 @@ Route::get('o/{token}', [QuoteController::class, 'public'])->name('public.quote'
 // Audyt dowolnej strony – raport dla potencjalnego klienta
 Route::get('audyt/{token}', [WebAuditController::class, 'public'])->name('public.web-audit');
 Route::get('audyt/{token}/pdf', [WebAuditController::class, 'pdf'])->name('public.web-audit.pdf');
+// Formularz zgłoszeń dla klienta / agencji (link z tokenem, bez logowania)
+Route::get('zgloszenie/{token}', [RequestFormController::class, 'show'])->name('public.request');
+Route::post('zgloszenie/{token}', [RequestFormController::class, 'submit'])->middleware('throttle:6,10')->name('public.request.submit');
 Route::get('o/{token}/pdf', [QuoteController::class, 'pdf'])->name('public.quote.pdf');
 Route::post('o/{token}', [QuoteController::class, 'decide'])->middleware('throttle:10,1')->name('public.quote.decide');
 Route::get('a/{token}/{audit}/pdf', [SiteController::class, 'pdf'])->name('public.site-audit.pdf');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('today', [TodayController::class, 'index'])->name('today');
+    Route::get('search', SearchController::class)->middleware('throttle:120,1')->name('search');
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Stoper przy zadaniach, zgłoszenia, przypomnienia o kontakcie
+    Route::post('care/tasks/{task}/timer/start', [WorkController::class, 'timerStart'])->name('timer.start');
+    Route::post('care/tasks/{task}/timer/stop', [WorkController::class, 'timerStop'])->name('timer.stop');
+    Route::get('requests', [WorkController::class, 'requests'])->name('requests');
+    Route::post('followups/{type}/{id}', [WorkController::class, 'followup'])->whereIn('type', ['quote', 'audit'])->whereNumber('id')->name('followups.handle');
+
+    // SEO: Google Search Console
+    Route::get('clients/{client}/seo', [SeoController::class, 'index'])->name('clients.seo');
+    Route::post('clients/{client}/seo/sync', [SeoController::class, 'sync'])->middleware('throttle:10,1')->name('clients.seo.sync');
     Route::get('tasks', [DashboardController::class, 'tasks'])->name('tasks');
 
     // Agencje (zleceniodawcy) i strony obsługiwane na ich zlecenie
@@ -97,6 +118,14 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
 
         Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        // Finanse: rentowność i faktury (Fakturownia)
+        Route::get('profitability', [FinanceController::class, 'profitability'])->name('profitability');
+        Route::get('invoices', [FinanceController::class, 'invoices'])->name('invoices.index');
+        Route::get('invoices/draft', [FinanceController::class, 'draft'])->name('invoices.draft');
+        Route::post('invoices', [FinanceController::class, 'store'])->middleware('throttle:20,1')->name('invoices.store');
+        Route::post('invoices/{invoice}/send', [FinanceController::class, 'send'])->middleware('throttle:20,1')->name('invoices.send');
+        Route::post('invoices/{invoice}/paid', [FinanceController::class, 'paid'])->name('invoices.paid');
+        Route::post('invoices/test', [FinanceController::class, 'testFakturownia'])->middleware('throttle:10,1')->name('invoices.test');
         Route::get('clients/{client}/billing', [BillingController::class, 'client'])->name('clients.billing');
         Route::post('clients/{client}/billing', [BillingController::class, 'store'])->name('billing.store');
         Route::put('billing/{item}', [BillingController::class, 'update'])->name('billing.update');

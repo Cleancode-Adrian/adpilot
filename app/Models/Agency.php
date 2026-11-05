@@ -5,12 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /** Agencja – zleceniodawca, dla którego obsługujesz strony jego klientów. */
 class Agency extends Model
 {
     protected $fillable = [
-        'name', 'website_url', 'tax_id', 'contact_name', 'contact_email', 'contact_phone', 'white_label',
+        'name', 'website_url', 'tax_id', 'billing_name', 'billing_street', 'billing_post_code', 'billing_city', 'billing_email', 'contact_name', 'contact_email', 'contact_phone', 'white_label',
         'logo', 'brand_color', 'report_footer', 'hourly_rate', 'currency', 'terms', 'notes', 'archived_at',
     ];
 
@@ -21,6 +22,18 @@ class Agency extends Model
             'hourly_rate' => 'float',
             'archived_at' => 'datetime',
         ];
+    }
+
+    protected $hidden = ['request_token'];
+
+    /** Link do formularza zgłoszeń agencji – wybiera stronę z listy swoich stron. */
+    public function requestUrl(): string
+    {
+        if (! $this->request_token) {
+            $this->forceFill(['request_token' => Str::random(40)])->saveQuietly();
+        }
+
+        return route('public.request', $this->request_token);
     }
 
     public function clients(): HasMany

@@ -35,6 +35,13 @@
 
 @endforeach
 @endif
+@if(count($followups ?? []))
+## 📞 Do kontaktu (sprzedaż)
+@foreach($followups as $f)
+- **{{ $f['who'] ?: '—' }}** – {{ $f['title'] }} (od {{ \Carbon\Carbon::parse($f['since'])->format('d.m') }})
+@endforeach
+
+@endif
 @if(count($clients))
 ## Pilne zadania reklamowe
 @foreach($clients as $c)

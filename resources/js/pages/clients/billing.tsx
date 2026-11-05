@@ -1,4 +1,5 @@
 import { BillingForm, type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
+import { InvoiceButton } from '@/components/adpilot/invoice-dialog';
 import { Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import ClientLayout from '@/layouts/client-layout';
@@ -45,11 +46,14 @@ export default function ClientBilling({
                 title="Abonamenty, domeny, hostingi, licencje"
                 description={`Przypomnienie przychodzi e-mailem i jako zadanie u klienta – przed fakturą lub odnowieniem. Przychód miesięczny od klienta: ${money(mrr, client.currency, 2)}${net}${vat === null ? '' : ` (${money(gross(mrr), client.currency, 2)} brutto)`}.`}
                 actions={
-                    mode !== 'add' && (
-                        <Button size="sm" onClick={() => setMode('add')}>
-                            <Plus className="size-4" /> Dodaj
-                        </Button>
-                    )
+                    <div className="flex gap-2">
+                        <InvoiceButton clientId={client.id} currency={client.currency} size="default" />
+                        {mode !== 'add' && (
+                            <Button size="sm" onClick={() => setMode('add')}>
+                                <Plus className="size-4" /> Dodaj
+                            </Button>
+                        )}
+                    </div>
                 }
             >
                 {mode === 'add' && (

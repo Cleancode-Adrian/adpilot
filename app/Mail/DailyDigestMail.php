@@ -21,6 +21,6 @@ class DailyDigestMail extends Mailable
 
     public function content(): Content
     {
-        return new Content(markdown: 'mail.daily-digest', with: $this->digest + ['url' => route('dashboard'), 'statusUrl' => route('admin.status')]);
+        return new Content(markdown: 'mail.daily-digest', with: $this->digest + ['url' => route('today'), 'statusUrl' => route('admin.status')]);
     }
 }

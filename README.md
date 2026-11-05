@@ -47,10 +47,20 @@ Harmonogram (`schedule:work` albo cron `* * * * * php artisan schedule:run`):
 - 03:00: kopia bazy, 08:00: poranny e-mail z pilnymi zadaniami,
 - co minutę / 5 min: sygnał „żyję” harmonogramu i kolejki (widoczny w **Status systemu**).
 
+## Praca na co dzień
+
+- **Dziś** (strona startowa): pilne sprawy (strona nie działa, SSL, krytyczne alerty WordPress i reklam), zadania na dziś i zaległe ze wszystkich klientów, najbliższe 7 dni, „Do kontaktu” (oferty bez odpowiedzi po 5 dniach, audyty potencjalnych klientów) i pieniądze (do zafakturowania, niezapłacone faktury, odnowienia).
+- **Stoper** ▶ przy każdym zadaniu – czas dolicza się sam; działający stoper widać w nagłówku na każdej stronie. Naraz działa jeden.
+- **Zgłoszenia**: link do formularza (karta klienta / agencji) – zgłoszenie staje się zadaniem z terminem (3 dni robocze, pilne – 1) + e-mail do Ciebie. Agencja wybiera stronę ze swojej listy; klient agencji white label widzi markę agencji.
+- **Szukaj (Ctrl+K)**: klienci, agencje, oferty, zadania.
+- **Agencje**: strony obsługiwane na zlecenie, rozliczenie miesięczne (kwota albo czas × stawka), raporty white label.
+- **SEO** (zakładka klienta): Google Search Console – kliknięcia, wyświetlenia, pozycja, najlepsze frazy i podstrony z porównaniem do poprzednich 28 dni.
+- **Finanse** (administrator): Rozliczenia, **Faktury** (Fakturownia – „Wystaw fakturę” w Rozliczeniach, u klienta i w agencji), **Rentowność** (realna stawka za godzinę na klienta).
+
 ## Panel administratora
 
 - **Status systemu**: co jest połączone i skonfigurowane (Google, Meta, AI, poczta, kolejka, cron, kopie, HTTPS) + przyciski „Wyślij testowy e-mail” i „Testuj AI”.
-- **Ustawienia agencji**: nazwa, logo, kolor, dane kontaktowe, stopka raportu.
+- **Ustawienia agencji**: nazwa, logo, kolor, dane kontaktowe, stopka raportu, VAT (domyślnie bez VAT – jedna kwota), Fakturownia, docelowa stawka godzinowa.
 - **Zespół**: konta, uprawnienia administratora, poranny e-mail.
 
 ## Kampanie na kontakty (leady)
@@ -64,14 +74,19 @@ Cel „Kontakty” w ustawieniach klienta zmienia sposób liczenia: z GA4 pobier
 ## Konfiguracja dostępów (jednorazowo dla agencji)
 
 ### Google Ads + GA4
-1. [Google Cloud Console](https://console.cloud.google.com/): utwórz projekt i włącz **Google Ads API**, **Google Analytics Data API** oraz **Google Analytics Admin API**.
-2. Ekran zgody OAuth: typ „Zewnętrzny”, zakresy `adwords` i `analytics.readonly`. Aby wyjść z trybu testowego, potrzebna jest weryfikacja aplikacji przez Google.
+1. [Google Cloud Console](https://console.cloud.google.com/): utwórz projekt i włącz **Google Ads API**, **Google Analytics Data API**, **Google Analytics Admin API** oraz **Google Search Console API**.
+2. Ekran zgody OAuth: typ „Zewnętrzny”, zakresy `adwords`, `analytics.readonly` i `webmasters.readonly` (Search Console). Konta połączone przed dodaniem Search Console trzeba połączyć ponownie (zakładka SEO → „Połącz z Google”). Aby wyjść z trybu testowego, potrzebna jest weryfikacja aplikacji przez Google.
 3. Dane logowania, potem identyfikator klienta OAuth (aplikacja internetowa). URI przekierowania: `https://TWOJA-DOMENA/oauth/google-callback`.
 4. **Developer token**: na koncie menedżera (MCC) wybierz Narzędzia, a potem Centrum API. Złóż wniosek o *Basic access*, bo token testowy działa tylko na kontach testowych.
 5. Uzupełnij `.env`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (ID MCC bez myślników).
 6. Najprościej jest podpiąć konta klientów pod swoje MCC i łączyć się swoim kontem Google.
 
 Google wydaje nową wersję API kilka razy w roku i wyłącza starsze. Wersję ustawiasz w `GOOGLE_ADS_API_VERSION` (domyślnie `v26`).
+
+### Fakturownia (faktury jednym kliknięciem)
+1. W Fakturowni: Ustawienia → Ustawienia konta → Integracja → **Kod autoryzacyjny API**.
+2. W panelu: Ustawienia agencji → Fakturownia: adres konta (np. `mojafirma`), kod API (zapisywany zaszyfrowany), rodzaj dokumentu (faktura / rachunek), termin płatności. Bez VAT pozycje idą ze stawką „zw”; podstawę zwolnienia możesz podać w ustawieniach albo mieć ją ustawioną w Fakturowni.
+3. Uzupełnij **Dane do faktury** (nazwa, NIP, adres) w kliencie / agencji. Przycisk „Sprawdź połączenie” testuje kod API.
 
 ### Meta Ads
 1. [developers.facebook.com](https://developers.facebook.com/): utwórz aplikację typu **Firma** i dodaj **Marketing API** oraz **Facebook Login for Business**.

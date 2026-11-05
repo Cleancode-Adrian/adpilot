@@ -1,3 +1,4 @@
+import { InvoiceButton } from '@/components/adpilot/invoice-dialog';
 import { EmptyState, NetGross, Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,6 +89,7 @@ export default function AgencySettlement({
                                 <FileDown className="size-4" /> PDF dla agencji
                             </a>
                         </Button>
+                        <InvoiceButton agencyId={agency.id} currency={cur} size="default" />
                         <Button
                             size="sm"
                             disabled={data.totals.open_tasks === 0}

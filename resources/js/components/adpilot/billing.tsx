@@ -1,3 +1,4 @@
+import { InvoiceButton } from '@/components/adpilot/invoice-dialog';
 import { NativeSelect, NetGross, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,6 +78,7 @@ export function ExtraWorkList({ groups }: { groups: ExtraWork[] }) {
                             {g.client.name}
                         </Link>
                         <NetGross value={g.total} currency={g.client.currency} className="ml-auto font-semibold" />
+                        <InvoiceButton clientId={g.client.id} currency={g.client.currency} />
                         <Button
                             size="sm"
                             variant="outline"
@@ -230,12 +232,15 @@ export function BillingRow({
     types,
     periods,
     showClient = false,
+    invoice = false,
     onEdit,
 }: {
     item: BillingItem;
     types: Record<string, string>;
     periods: Record<string, string>;
     showClient?: boolean;
+    /** przycisk „Wystaw fakturę” dla klienta tej pozycji */
+    invoice?: boolean;
     onEdit?: () => void;
 }) {
     return (
@@ -262,6 +267,7 @@ export function BillingRow({
             </div>
             <DueLabel item={item} />
             <div className="flex">
+                {invoice && <InvoiceButton clientId={item.client_id} currency={item.currency} />}
                 {item.active && item.next_date && (
                     <Button
                         variant="outline"

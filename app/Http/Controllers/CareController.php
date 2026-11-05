@@ -6,6 +6,7 @@ use App\Models\CareTask;
 use App\Models\CareTemplate;
 use App\Models\Client;
 use App\Services\Care\CarePlanner;
+use App\Services\Work\TaskTimer;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -31,10 +32,10 @@ class CareController extends Controller
             ->orderBy('name')->get(['id', 'name', 'website_url']);
 
         $rows = $clients->map(function (Client $c) use ($period) {
-            $tasks = $c->careTasks()
+            $tasks = $c->careTasks()->with('doneBy:id,name')
                 ->where(fn ($q) => $q->where('period', $period)->orWhere(fn ($o) => $o->due()->where('period', '<', $period)))
                 ->orderByRaw("case status when 'todo' then 0 else 1 end")->orderBy('due_date')->orderBy('id')
-                ->get(['id', 'client_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'note', 'minutes', 'amount', 'invoiced_at']);
+                ->get(CareTask::LIST_COLUMNS);
 
             return [
                 'client' => $c,
@@ -61,7 +62,7 @@ class CareController extends Controller
             $this->planner->ensureMonth($client, $month);
         }
 
-        $columns = ['id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes', 'amount', 'invoiced_at'];
+        $columns = CareTask::LIST_COLUMNS;
 
         return Inertia::render('clients/care', [
             'client' => app(ClientController::class)->clientProps($client),
@@ -109,6 +110,11 @@ class CareController extends Controller
             if (! $task->care_template_id) {
                 $data['period'] = substr($data['due_date'], 0, 7);
             }
+        }
+        if (isset($data['status']) && $data['status'] !== 'todo' && $task->timer_started_at) {
+            // odhaczenie zadania z włączonym stoperem – doliczamy czas
+            app(TaskTimer::class)->stop($task);
+            unset($data['minutes']);
         }
         if (isset($data['status'])) {
             $data += $data['status'] === 'todo'
@@ -182,7 +188,7 @@ class CareController extends Controller
         $added = $this->planner->applyPreset($client, $key);
 
         return back()->with('success', $added
-            ? "Dodano pakiet „".CarePlanner::PRESETS[$key]['label']."” ($added zadań). Zadania na ten miesiąc są już na liście."
+            ? 'Dodano pakiet „'.CarePlanner::PRESETS[$key]['label']."” ($added zadań). Zadania na ten miesiąc są już na liście."
             : 'Wszystkie zadania z tego pakietu są już w planie.');
     }
 
