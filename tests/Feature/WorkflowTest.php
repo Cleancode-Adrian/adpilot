@@ -8,7 +8,6 @@ use App\Models\BillingItem;
 use App\Models\CareTask;
 use App\Models\Client;
 use App\Models\Integration;
-use App\Models\Invoice;
 use App\Models\Quote;
 use App\Models\Setting;
 use App\Models\User;
@@ -17,14 +16,13 @@ use App\Services\Connectors\SearchConsoleConnector;
 use App\Services\Sales\Followups;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
-/** Pulpit „Dziś”, stoper, zgłoszenia, przypomnienia o kontakcie, rentowność, faktury, Search Console, wyszukiwarka. */
+/** Pulpit „Dziś”, stoper, zgłoszenia, przypomnienia o kontakcie, rentowność, Search Console, wyszukiwarka. */
 class WorkflowTest extends TestCase
 {
     use RefreshDatabase;
@@ -165,70 +163,6 @@ class WorkflowTest extends TestCase
         $this->get('/profitability?months=1')->assertInertia(fn (Assert $p) => $p->component('finance/profitability')
             ->where('data.rows.0.name', 'Abonament')->where('data.rows.0.effective_rate', 75)->where('data.rows.0.flag', 'low')
             ->where('data.rows.1.revenue', 120)->where('data.rows.1.effective_rate', 120));
-    }
-
-    public function test_invoice_from_fakturownia_marks_work_and_advances_subscription(): void
-    {
-        $user = $this->admin();
-        Setting::put(['fakturownia_domain' => 'mojafirma', 'fakturownia_token' => Crypt::encryptString('SEKRET')]);
-        $c = $this->client(['billing_name' => 'Piekarnia Kowalski', 'tax_id' => '1234567890', 'billing_city' => 'Kraków']);
-        $work = $this->task($c, ['title' => 'Nowy formularz', 'status' => 'done', 'done_at' => now(), 'amount' => 300]);
-        $sub = BillingItem::create(['client_id' => $c->id, 'type' => 'subscription', 'name' => 'Opieka', 'amount' => 400, 'currency' => 'PLN',
-            'period' => 'monthly', 'next_date' => now()->startOfMonth()->addDays(9)->toDateString(), 'active' => true]);
-
-        Http::fake([
-            'mojafirma.fakturownia.pl/invoices.json' => Http::response(['id' => 991, 'number' => 'FV 1/11/2026', 'token' => 'abc'], 201),
-            'mojafirma.fakturownia.pl/invoices/991/send_by_email.json*' => Http::response(['status' => 'ok']),
-        ]);
-
-        $draft = $this->getJson("/invoices/draft?client_id={$c->id}")->assertOk()->json();
-        $this->assertSame(['task-'.$work->id, 'sub-'.$sub->id], array_column($draft['lines'], 'key'));
-        $this->assertSame('Piekarnia Kowalski', $draft['buyer']['name']);
-
-        $this->post('/invoices', ['client_id' => $c->id, 'keys' => array_column($draft['lines'], 'key'), 'send' => true])->assertSessionHas('success');
-
-        Http::assertSent(function (Request $r) {
-            if (! str_ends_with($r->url(), '/invoices.json')) {
-                return false;
-            }
-            $inv = $r['invoice'];
-
-            return $r['api_token'] === 'SEKRET' && $inv['buyer_tax_no'] === '1234567890' && $inv['positions'][0]['tax'] === 'zw'
-                && $inv['positions'][0]['total_price_gross'] == 300 && count($inv['positions']) === 2;
-        });
-        $invoice = Invoice::firstOrFail();
-        $this->assertSame('FV 1/11/2026', $invoice->number);
-        $this->assertSame(700.0, $invoice->total);
-        $this->assertSame('sent', $invoice->status);
-        $this->assertSame('https://mojafirma.fakturownia.pl/invoice/abc', $invoice->view_url);
-        $this->assertSame($invoice->id, $work->fresh()->invoice_id);
-        $this->assertNotNull($work->fresh()->invoiced_at);
-        $this->assertSame(now()->startOfMonth()->addDays(9)->addMonthNoOverflow()->toDateString(), $sub->fresh()->next_date);
-
-        $this->post("/invoices/{$invoice->id}/paid");
-        $this->assertSame('paid', $invoice->fresh()->status);
-        $this->get('/invoices')->assertInertia(fn (Assert $p) => $p->has('invoices', 1)->where('unpaid', 0));
-    }
-
-    public function test_agency_invoice_uses_hourly_rate_for_work_without_amount(): void
-    {
-        $this->admin();
-        $agency = Agency::create(['name' => 'Studio', 'hourly_rate' => 100, 'tax_id' => '999']);
-        $c = $this->client(['agency_id' => $agency->id]);
-        $this->task($c, ['title' => 'Poprawki', 'status' => 'done', 'done_at' => now(), 'minutes' => 90]);
-
-        $draft = $this->getJson("/invoices/draft?agency_id={$agency->id}")->json();
-        $this->assertSame(150.0, (float) $draft['lines'][0]['unit_price']);
-        $this->assertSame('Piekarnia: Poprawki (1,5 h)', $draft['lines'][0]['name']);
-        $this->assertFalse($draft['configured']);
-    }
-
-    public function test_settings_never_expose_fakturownia_token(): void
-    {
-        $this->actingAs(User::factory()->create(['is_admin' => true, 'two_factor_confirmed_at' => now()]));
-        Setting::put(['fakturownia_token' => Crypt::encryptString('SEKRET')]);
-
-        $this->get('/admin/settings')->assertInertia(fn (Assert $p) => $p->missing('settings.fakturownia_token')->where('settings.fakturownia_token_set', true));
     }
 
     public function test_search_console_sync_and_seo_page(): void

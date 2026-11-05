@@ -5,16 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type Brand } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { PlugZap } from 'lucide-react';
+import { Head, useForm } from '@inertiajs/react';
 
-export default function AgencySettings({
-    settings,
-    brand,
-}: {
-    settings: Record<string, string | null> & { fakturownia_token_set?: boolean };
-    brand: Brand;
-}) {
+export default function AgencySettings({ settings, brand }: { settings: Record<string, string | null>; brand: Brand }) {
     const form = useForm({
         agency_name: brand.name ?? '',
         agency_email: settings.agency_email ?? brand.email ?? '',
@@ -24,16 +17,9 @@ export default function AgencySettings({
         report_footer: settings.report_footer ?? '',
         vat_rate: settings.vat_rate ?? 'zw',
         target_hourly_rate: settings.target_hourly_rate ?? '',
-        fakturownia_domain: settings.fakturownia_domain ?? '',
-        fakturownia_token: '',
-        remove_fakturownia: false as boolean,
-        invoice_kind: settings.invoice_kind ?? 'vat',
-        invoice_exempt_basis: settings.invoice_exempt_basis ?? '',
-        invoice_payment_days: settings.invoice_payment_days ?? '7',
         logo: null as File | null,
         remove_logo: false as boolean,
     });
-    const tokenSet = !!settings.fakturownia_token_set;
 
     const field = (name: 'agency_name' | 'agency_email' | 'agency_phone' | 'agency_website', label: string, placeholder = '') => (
         <div className="grid gap-1.5">
@@ -139,98 +125,6 @@ export default function AgencySettings({
                             </p>
                             <InputError message={form.errors.vat_rate} />
                         </div>
-                    </div>
-                </Section>
-
-                <Section
-                    title="Fakturownia – faktury jednym kliknięciem"
-                    description="Przycisk „Wystaw fakturę” w Rozliczeniach, u klienta i w agencji tworzy fakturę w Twoim koncie Fakturowni."
-                >
-                    <div id="fakturownia" className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="fakturownia_domain">Adres konta</Label>
-                            <div className="flex items-center gap-1">
-                                <Input
-                                    id="fakturownia_domain"
-                                    value={form.data.fakturownia_domain}
-                                    placeholder="mojafirma"
-                                    onChange={(e) => form.setData('fakturownia_domain', e.target.value)}
-                                />
-                                <span className="text-muted-foreground text-sm whitespace-nowrap">.fakturownia.pl</span>
-                            </div>
-                            <InputError message={form.errors.fakturownia_domain} />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="fakturownia_token">Kod autoryzacyjny API</Label>
-                            <Input
-                                id="fakturownia_token"
-                                type="password"
-                                autoComplete="off"
-                                value={form.data.fakturownia_token}
-                                placeholder={tokenSet ? 'zapisany – zostaw puste, by nie zmieniać' : 'Ustawienia → Ustawienia konta → Integracja'}
-                                onChange={(e) => form.setData('fakturownia_token', e.target.value)}
-                            />
-                            <InputError message={form.errors.fakturownia_token} />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="invoice_kind">Rodzaj dokumentu</Label>
-                            <NativeSelect
-                                id="invoice_kind"
-                                value={form.data.invoice_kind}
-                                onChange={(e) => form.setData('invoice_kind', e.target.value)}
-                            >
-                                <option value="vat">Faktura</option>
-                                <option value="bill">Rachunek</option>
-                            </NativeSelect>
-                            <p className="text-muted-foreground text-xs">
-                                Bez VAT pozycje idą ze stawką „zw” – rodzaj ustaw tak, jak wystawiasz w Fakturowni.
-                            </p>
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="invoice_payment_days">Termin płatności (dni)</Label>
-                            <Input
-                                id="invoice_payment_days"
-                                type="number"
-                                min={0}
-                                max={120}
-                                value={form.data.invoice_payment_days}
-                                onChange={(e) => form.setData('invoice_payment_days', e.target.value)}
-                            />
-                        </div>
-                        {form.data.vat_rate === 'zw' && (
-                            <div className="grid gap-1.5 sm:col-span-2">
-                                <Label htmlFor="invoice_exempt_basis">Podstawa zwolnienia z VAT (opcjonalnie)</Label>
-                                <Input
-                                    id="invoice_exempt_basis"
-                                    value={form.data.invoice_exempt_basis}
-                                    placeholder="zostaw puste, jeśli podstawę masz ustawioną w Fakturowni"
-                                    onChange={(e) => form.setData('invoice_exempt_basis', e.target.value)}
-                                />
-                                <p className="text-muted-foreground text-xs">
-                                    Przekazywana do pola zwolnienia w Fakturowni – wpisz dokładnie tak, jak w Twoim koncie Fakturowni.
-                                </p>
-                            </div>
-                        )}
-                        {tokenSet && (
-                            <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => router.post('/invoices/test', {}, { preserveScroll: true })}
-                                >
-                                    <PlugZap className="size-4" /> Sprawdź połączenie
-                                </Button>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.data.remove_fakturownia}
-                                        onChange={(e) => form.setData('remove_fakturownia', e.target.checked)}
-                                    />
-                                    odłącz Fakturownię
-                                </label>
-                            </div>
-                        )}
                     </div>
                 </Section>
 

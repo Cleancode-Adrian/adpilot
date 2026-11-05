@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CareTask extends Model
 {
     protected $fillable = ['client_id', 'care_template_id', 'period', 'title', 'description', 'due_date', 'status', 'done_at', 'done_by', 'note', 'minutes', 'amount', 'invoiced_at',
-        'timer_started_at', 'source', 'requester', 'invoice_id'];
+        'timer_started_at', 'source', 'requester'];
 
     protected $casts = ['done_at' => 'datetime', 'invoiced_at' => 'datetime', 'amount' => 'float', 'timer_started_at' => 'datetime', 'requester' => 'array'];
 

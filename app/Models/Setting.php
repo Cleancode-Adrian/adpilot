@@ -28,11 +28,6 @@ class Setting extends Model
         'agency_logo' => null,          // ścieżka w storage/app/public
         'brand_color' => '#2a78d6',
         'report_footer' => null,
-        'fakturownia_domain' => null,   // np. „mojafirma” (mojafirma.fakturownia.pl)
-        'fakturownia_token' => null,    // kod API – zaszyfrowany
-        'invoice_kind' => 'vat',        // vat = faktura, bill = rachunek
-        'invoice_exempt_basis' => null, // podstawa zwolnienia z VAT (gdy bez VAT), np. art. 113 ust. 1
-        'invoice_payment_days' => '7',
         'target_hourly_rate' => null,   // docelowa stawka godzinowa – poniżej klient jest oznaczony w Rentowności
         'vat_rate' => 'zw',             // „zw” = bez VAT (kwota jedna, bez netto/brutto); liczba = stawka VAT w %
     ];

@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\Reports\AiReportWriter;
 use App\Services\SystemStatus;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
@@ -59,11 +58,7 @@ class AdminController extends Controller
 
     public function settings()
     {
-        $settings = Setting::all_();
-        $tokenSet = filled($settings['fakturownia_token'] ?? null);
-        unset($settings['fakturownia_token']); // kodu API nie wysyłamy do przeglądarki
-
-        return Inertia::render('admin/settings', ['settings' => $settings + ['fakturownia_token_set' => $tokenSet], 'brand' => Setting::brand()]);
+        return Inertia::render('admin/settings', ['settings' => Setting::all_(), 'brand' => Setting::brand()]);
     }
 
     public function updateSettings(Request $request)
@@ -76,12 +71,6 @@ class AdminController extends Controller
             'brand_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'report_footer' => 'nullable|string|max:500',
             'vat_rate' => ['nullable', 'regex:/^(zw|\d{1,2}(\.\d{1,2})?)$/'],
-            'fakturownia_domain' => ['nullable', 'string', 'max:120'],
-            'fakturownia_token' => 'nullable|string|max:200',
-            'remove_fakturownia' => 'boolean',
-            'invoice_kind' => 'nullable|in:vat,bill',
-            'invoice_exempt_basis' => 'nullable|string|max:255',
-            'invoice_payment_days' => 'nullable|integer|min:0|max:120',
             'target_hourly_rate' => 'nullable|numeric|min:0|max:100000',
             'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
             'remove_logo' => 'boolean',
@@ -95,17 +84,7 @@ class AdminController extends Controller
             Storage::disk('public')->delete((string) Setting::get('agency_logo'));
             $data['agency_logo'] = null;
         }
-        // kod API Fakturowni: zapisujemy zaszyfrowany; puste pole = bez zmian
-        if (filled($data['fakturownia_token'] ?? null)) {
-            $data['fakturownia_token'] = Crypt::encryptString(trim($data['fakturownia_token']));
-        } else {
-            unset($data['fakturownia_token']);
-        }
-        if ($request->boolean('remove_fakturownia')) {
-            $data['fakturownia_token'] = null;
-            $data['fakturownia_domain'] = null;
-        }
-        unset($data['logo'], $data['remove_logo'], $data['remove_fakturownia']);
+        unset($data['logo'], $data['remove_logo']);
         Setting::put($data);
 
         return back()->with('success', 'Zapisano ustawienia agencji.');

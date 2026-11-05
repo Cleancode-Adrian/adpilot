@@ -7,7 +7,7 @@ import { date } from '@/lib/format';
 import { type SharedData } from '@/types';
 import { type CareTask } from '@/types/adpilot';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlarmClock, BarChart3, CheckCircle2, Globe, Inbox, Lock, PlusCircle, Receipt, ShieldAlert, Wallet } from 'lucide-react';
+import { AlarmClock, BarChart3, CheckCircle2, Globe, Inbox, Lock, PlusCircle, ShieldAlert, Wallet } from 'lucide-react';
 
 interface Urgent {
     kind: 'down' | 'ssl' | 'wp' | 'ads';
@@ -19,15 +19,6 @@ interface Money {
     subscriptions_due: number;
     extra_open: number;
     renewals: { id: number; name: string; client: string; client_id: number; next_date: string; days_left: number | null }[];
-    overdue_invoices: {
-        id: number;
-        number: string | null;
-        buyer_name: string | null;
-        total: number;
-        currency: string;
-        payment_to: string;
-        view_url: string | null;
-    }[];
 }
 
 const URGENT_ICON = { down: ShieldAlert, ssl: Lock, wp: ShieldAlert, ads: BarChart3 };
@@ -166,25 +157,6 @@ export default function Today({
                                         </span>
                                         <NetGross value={toInvoice} className="font-semibold" />
                                     </Link>
-                                    {money.overdue_invoices.length > 0 && (
-                                        <div className="rounded-lg border border-[#b42f2f]/40 p-3">
-                                            <div className="mb-1 inline-flex items-center gap-2 font-medium text-[#b42f2f] dark:text-[#f08080]">
-                                                <Receipt className="size-4" /> Niezapłacone po terminie
-                                            </div>
-                                            <ul className="grid gap-0.5">
-                                                {money.overdue_invoices.map((i) => (
-                                                    <li key={i.id} className="flex justify-between gap-2">
-                                                        <Link href="/invoices?status=unpaid" className="truncate hover:underline">
-                                                            {i.number ?? 'faktura'} · {i.buyer_name}
-                                                        </Link>
-                                                        <span className="shrink-0 tabular-nums">
-                                                            <NetGross value={i.total} currency={i.currency} />
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
                                     {money.renewals.length > 0 && (
                                         <div className="rounded-lg border p-3">
                                             <div className="mb-1 inline-flex items-center gap-2 font-medium">

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\BillingItem;
 use App\Models\CareTask;
-use App\Models\Invoice;
 use App\Models\Recommendation;
 use App\Models\SiteMonitor;
 use App\Models\WpEvent;
@@ -64,8 +63,6 @@ class TodayController extends Controller
                 'renewals' => BillingItem::where('active', true)->where('type', '!=', 'subscription')->whereNotNull('next_date')
                     ->where('next_date', '<=', $today->addDays(14)->toDateString())->whereHas('client', $active)->with('client:id,name')->orderBy('next_date')->get()
                     ->map(fn (BillingItem $b) => ['id' => $b->id, 'name' => $b->name, 'client' => $b->client->name, 'client_id' => $b->client_id, 'next_date' => $b->next_date, 'days_left' => $b->daysLeft()]),
-                'overdue_invoices' => Invoice::where('status', '!=', 'paid')->whereNotNull('payment_to')->where('payment_to', '<', $today->toDateString())
-                    ->orderBy('payment_to')->get(['id', 'number', 'buyer_name', 'total', 'currency', 'payment_to', 'view_url']),
             ];
         }
 

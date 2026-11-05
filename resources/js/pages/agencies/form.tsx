@@ -115,7 +115,7 @@ export default function AgencyForm({ agency }: { agency: AgencyProps | null }) {
                 <details className="rounded-xl border p-4" open={!!(agency?.billing_name || agency?.billing_street)}>
                     <summary className="cursor-pointer font-medium">Dane do faktury</summary>
                     <p className="text-muted-foreground mt-1 mb-4 text-sm">
-                        Używane przy wystawianiu faktur w Fakturowni. Puste pola = nazwa i e-mail kontaktowy.
+                        Pod ręką przy wystawianiu faktury: pełna nazwa, NIP, adres i e-mail do faktur.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
                         {field('billing_name', 'Pełna nazwa firmy', { placeholder: 'np. Zielony Ogród Anna Nowak' })}

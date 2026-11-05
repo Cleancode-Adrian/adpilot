@@ -13,7 +13,6 @@ import {
     ListChecks,
     Palette,
     PiggyBank,
-    Receipt,
     ScanSearch,
     ShieldCheck,
     Sun,
@@ -40,7 +39,6 @@ export function AppSidebar() {
     const finance: NavItem[] = admin
         ? [
               { title: 'Rozliczenia', url: '/billing', icon: Wallet },
-              { title: 'Faktury', url: '/invoices', icon: Receipt },
               { title: 'Rentowność', url: '/profitability', icon: PiggyBank },
           ]
         : [];

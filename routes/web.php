@@ -118,14 +118,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
 
         Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
-        // Finanse: rentowność i faktury (Fakturownia)
+        // Finanse: rentowność klientów
         Route::get('profitability', [FinanceController::class, 'profitability'])->name('profitability');
-        Route::get('invoices', [FinanceController::class, 'invoices'])->name('invoices.index');
-        Route::get('invoices/draft', [FinanceController::class, 'draft'])->name('invoices.draft');
-        Route::post('invoices', [FinanceController::class, 'store'])->middleware('throttle:20,1')->name('invoices.store');
-        Route::post('invoices/{invoice}/send', [FinanceController::class, 'send'])->middleware('throttle:20,1')->name('invoices.send');
-        Route::post('invoices/{invoice}/paid', [FinanceController::class, 'paid'])->name('invoices.paid');
-        Route::post('invoices/test', [FinanceController::class, 'testFakturownia'])->middleware('throttle:10,1')->name('invoices.test');
         Route::get('clients/{client}/billing', [BillingController::class, 'client'])->name('clients.billing');
         Route::post('clients/{client}/billing', [BillingController::class, 'store'])->name('billing.store');
         Route::put('billing/{item}', [BillingController::class, 'update'])->name('billing.update');

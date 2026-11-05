@@ -200,7 +200,7 @@ export default function ClientForm({
                 <details className="rounded-xl border p-4" open={!!(data.billing_name || data.tax_id)}>
                     <summary className="cursor-pointer font-medium">Dane do faktury</summary>
                     <p className="text-muted-foreground mt-1 mb-4 text-sm">
-                        Używane przy wystawianiu faktur w Fakturowni. Puste pola = nazwa i e-mail kontaktowy.
+                        Pod ręką przy wystawianiu faktury: pełna nazwa, NIP, adres i e-mail do faktur.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
                         {field('billing_name', 'Pełna nazwa firmy', { placeholder: 'np. Zielony Ogród Anna Nowak' })}
