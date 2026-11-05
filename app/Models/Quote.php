@@ -37,7 +37,12 @@ class Quote extends Model
             'valid_until' => now()->addDays(14)->toDateString(),
             'token' => Str::random(40),
             'created_by' => auth()->id(),
-            'terms' => "Ceny netto. Do cen należy doliczyć podatek VAT.\nTermin realizacji ustalamy po akceptacji oferty.\nPłatność: przelew 7 dni od wystawienia faktury.",
+            // stawka VAT z ustawień agencji (null = bez VAT – ceny są cenami końcowymi)
+            'vat_rate' => Setting::vatRate(),
+            'terms' => (Setting::vatRate() === null
+                ? "Podane ceny są cenami końcowymi (sprzedawca nie jest płatnikiem VAT).\n"
+                : "Ceny netto. Do cen należy doliczyć podatek VAT.\n")
+                ."Termin realizacji ustalamy po akceptacji oferty.\nPłatność: przelew 7 dni od wystawienia faktury.",
         ]);
     }
 

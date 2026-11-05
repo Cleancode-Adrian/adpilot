@@ -111,7 +111,11 @@ class AgencyToolsTest extends TestCase
         $this->assertCount(5, $quote->items);
         $t = $quote->totals();
         $this->assertSame(7400.0, $t['once']['net']);
-        $this->assertSame(1702.0, $t['once']['vat']);
+        // domyślnie bez VAT (ustawienie agencji „zw”) – kwota końcowa = kwota pozycji
+        $this->assertNull($quote->vat_rate);
+        $this->assertSame(0.0, $t['once']['vat']);
+        $this->assertSame(7400.0, $t['once']['gross']);
+        $this->assertStringNotContainsString('doliczyć podatek VAT', $quote->terms);
         $this->assertSame(250.0, $t['monthly']['net']);
 
         // edycja pozycji

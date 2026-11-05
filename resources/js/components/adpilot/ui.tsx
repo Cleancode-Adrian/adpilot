@@ -5,15 +5,18 @@ import { usePage } from '@inertiajs/react';
 import { AlertOctagon, AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, Info, Lightbulb, Minus, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-/** Stawka VAT z ustawień agencji (null = zwolniony) i przeliczenie netto → brutto. */
+/**
+ * Stawka VAT z ustawień agencji. null = bez VAT: jedna kwota, bez dopisków „netto/brutto”.
+ * net – dopisek do etykiet („ netto” dla płatnika VAT, pusty bez VAT).
+ */
 export function useVat() {
     const vat = usePage<SharedData>().props.vat_rate ?? null;
-    return { vat, gross: (net: number) => Math.round(net * (1 + (vat ?? 0) / 100) * 100) / 100 };
+    return { vat, net: vat === null ? '' : ' netto', gross: (net: number) => Math.round(net * (1 + (vat ?? 0) / 100) * 100) / 100 };
 }
 
 /**
- * Kwota netto + brutto: „400,00 zł netto · 492,00 zł brutto”.
- * size="lg" – duża kwota netto, brutto w drugiej linii (kafelki).
+ * Kwota pieniędzy. Bez VAT: „400,00 zł”. Płatnik VAT: „400,00 zł netto · 492,00 zł brutto”
+ * (size="lg" – brutto w drugiej linii, do kafelków).
  */
 export function NetGross({
     value,
@@ -30,7 +33,8 @@ export function NetGross({
     if (value === null || value === undefined) return <span className={className}>–</span>;
     const fmt = (v: number) =>
         new Intl.NumberFormat('pl-PL', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-    const g = vat === null ? 'zw. z VAT' : `${fmt(gross(value))} brutto`;
+    if (vat === null) return <span className={cn('tabular-nums', size === 'lg' && 'block', className)}>{fmt(value)}</span>;
+    const g = `${fmt(gross(value))} brutto`;
     if (size === 'lg')
         return (
             <span className={cn('block', className)}>

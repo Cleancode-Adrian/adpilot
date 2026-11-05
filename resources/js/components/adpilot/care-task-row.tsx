@@ -1,4 +1,4 @@
-import { NetGross } from '@/components/adpilot/ui';
+import { NetGross, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -138,13 +138,14 @@ function TimeInput({ task, onSave }: { task: CareTask; onSave: (minutes: number 
     );
 }
 
-/** Kwota netto za zadanie (prace dodatkowe) – trafia do „Rozliczeń” jako do zafakturowania. */
+/** Kwota za zadanie (prace dodatkowe) – trafia do „Rozliczeń” jako do zafakturowania. */
 function AmountInput({ task, onSave }: { task: CareTask; onSave: (amount: number | null) => void }) {
     const [value, setValue] = useState(task.amount != null ? String(task.amount) : '');
+    const { net } = useVat();
     return (
         <div className="flex flex-wrap items-center gap-1.5">
             <Banknote className="text-muted-foreground size-4" />
-            <span className="text-muted-foreground text-xs">Kwota dla klienta (netto):</span>
+            <span className="text-muted-foreground text-xs">Kwota dla klienta{net && ` (${net.trim()})`}:</span>
             <input
                 value={value}
                 inputMode="decimal"
@@ -157,7 +158,7 @@ function AmountInput({ task, onSave }: { task: CareTask; onSave: (amount: number
                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                 placeholder="0 = w abonamencie"
                 className="border-input bg-background h-7 w-36 rounded-md border px-2 text-sm"
-                aria-label="Kwota netto"
+                aria-label="Kwota"
             />
             <span className="text-muted-foreground text-xs">{task.invoiced_at ? 'zafakturowano' : 'zł – pojawi się w Rozliczeniach do faktury'}</span>
         </div>

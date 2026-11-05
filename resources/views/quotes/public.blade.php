@@ -86,7 +86,7 @@
     <h2>Zakres i cena</h2>
     <table class="items">
         <thead>
-            <tr><th style="width:4%">Lp.</th><th>Usługa</th><th class="num">Ilość</th><th class="num">Cena netto</th><th class="num">Wartość netto</th></tr>
+            <tr><th style="width:4%">Lp.</th><th>Usługa</th><th class="num">Ilość</th><th class="num">Cena{{ $quote->vat_rate !== null ? ' netto' : '' }}</th><th class="num">Wartość{{ $quote->vat_rate !== null ? ' netto' : '' }}</th></tr>
         </thead>
         <tbody>
             @foreach($quote->items as $n => $i)
@@ -104,11 +104,11 @@
 
     <table class="totals">
         @foreach($totals as $key => $t)
-            <tr><td class="ink2">{{ $t['label'] }} – netto</td><td class="num">{{ $money($t['net']) }}</td></tr>
             @if($quote->vat_rate !== null)
+                <tr><td class="ink2">{{ $t['label'] }} – netto</td><td class="num">{{ $money($t['net']) }}</td></tr>
                 <tr><td class="ink2">VAT {{ rtrim(rtrim(number_format($quote->vat_rate, 2, ',', ''), '0'), ',') }}%</td><td class="num">{{ $money($t['vat']) }}</td></tr>
             @endif
-            <tr class="grand"><td>{{ $t['label'] }} – {{ $quote->vat_rate !== null ? 'brutto' : 'do zapłaty (zw. z VAT)' }}</td><td class="num">{{ $money($t['gross']) }}</td></tr>
+            <tr class="grand"><td>{{ $t['label'] }} – {{ $quote->vat_rate !== null ? 'brutto' : 'do zapłaty' }}</td><td class="num">{{ $money($t['gross']) }}</td></tr>
         @endforeach
     </table>
 

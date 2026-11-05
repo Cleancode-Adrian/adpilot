@@ -1,4 +1,4 @@
-import { NativeSelect, NetGross } from '@/components/adpilot/ui';
+import { NativeSelect, NetGross, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -132,6 +132,7 @@ export function BillingForm({
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
+    const { net } = useVat();
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -177,7 +178,7 @@ export function BillingForm({
             </div>
             <div className="grid gap-3 sm:grid-cols-5">
                 <div className="grid gap-1.5">
-                    <Label>Kwota netto</Label>
+                    <Label>Kwota{net}</Label>
                     <Input type="number" min={0} step="0.01" value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0,00" />
                 </div>
                 <div className="grid gap-1.5">

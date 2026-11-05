@@ -1,4 +1,4 @@
-import { EmptyState, NetGross, Section } from '@/components/adpilot/ui';
+import { EmptyState, NetGross, Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -58,6 +58,7 @@ export default function AgencySettlement({
     data: Data;
 }) {
     const cur = data.currency;
+    const { net } = useVat();
     const m2 = (v: number | null) => money(v, cur, 2);
     const go = (month: string) => router.get(`/agencies/${agency.id}/settlement`, { month }, { preserveScroll: true });
 
@@ -77,7 +78,7 @@ export default function AgencySettlement({
                             Rozliczenie – {agency.name}, {data.month_label}
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            Prace wykonane w miesiącu na stronach agencji + abonamenty i odnowienia z terminem w tym miesiącu. Kwoty netto.
+                            Prace wykonane w miesiącu na stronach agencji + abonamenty i odnowienia z terminem w tym miesiącu.{net && ' Kwoty netto.'}
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

@@ -28,15 +28,21 @@ class Setting extends Model
         'agency_logo' => null,          // ścieżka w storage/app/public
         'brand_color' => '#2a78d6',
         'report_footer' => null,
-        'vat_rate' => '23',             // stawka VAT do pokazywania kwot brutto; „zw” = zwolniony
+        'vat_rate' => 'zw',             // „zw” = bez VAT (kwota jedna, bez netto/brutto); liczba = stawka VAT w %
     ];
 
-    /** Stawka VAT w procentach albo null, gdy firma jest zwolniona z VAT („zw”). */
+    /** Stawka VAT w procentach albo null, gdy firma nie jest płatnikiem VAT („zw”). */
     public static function vatRate(): ?float
     {
-        $v = (string) static::get('vat_rate', '23');
+        $v = (string) static::get('vat_rate', 'zw');
 
         return is_numeric($v) ? (float) $v : null;
+    }
+
+    /** Dopisek do kwot: „ netto” dla płatnika VAT, pusty bez VAT (kwota jest kwotą końcową). */
+    public static function netSuffix(): string
+    {
+        return static::vatRate() === null ? '' : ' netto';
     }
 
     /** Kwota brutto z netto wg stawki z ustawień. */

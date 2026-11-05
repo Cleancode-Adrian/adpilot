@@ -1,4 +1,4 @@
-import { EmptyState, NativeSelect, Section } from '@/components/adpilot/ui';
+import { EmptyState, NativeSelect, Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -63,6 +63,7 @@ export default function QuotesIndex({
     status: string | null;
     stats: { sent: number; accepted_month: number; accepted_value_month: number };
 }) {
+    const { net } = useVat();
     const form = useForm({ client_id: clients[0]?.id ? String(clients[0].id) : '', template: 'website' });
 
     return (
@@ -73,7 +74,8 @@ export default function QuotesIndex({
                     <h1 className="text-xl font-semibold">Oferty</h1>
                     <p className="text-muted-foreground text-sm">
                         Czeka na decyzję: {stats.sent} · zaakceptowane w tym miesiącu: {stats.accepted_month} (wartość roczna{' '}
-                        {money(stats.accepted_value_month, 'PLN')} netto)
+                        {money(stats.accepted_value_month, 'PLN')}
+                        {net})
                     </p>
                 </div>
 
@@ -144,7 +146,7 @@ export default function QuotesIndex({
                                     <tr className="text-muted-foreground border-b text-left text-xs">
                                         <th className="py-2 font-medium">Numer</th>
                                         <th className="py-2 font-medium">Klient / tytuł</th>
-                                        <th className="py-2 font-medium">Wartość netto</th>
+                                        <th className="py-2 font-medium">Wartość{net}</th>
                                         <th className="py-2 font-medium">Status</th>
                                         <th className="py-2 font-medium">Ważna do</th>
                                     </tr>

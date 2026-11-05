@@ -15,7 +15,7 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
         agency_website: settings.agency_website ?? '',
         brand_color: brand.color ?? '#2a78d6',
         report_footer: settings.report_footer ?? '',
-        vat_rate: settings.vat_rate ?? '23',
+        vat_rate: settings.vat_rate ?? 'zw',
         logo: null as File | null,
         remove_logo: false as boolean,
     });
@@ -110,15 +110,18 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
                             />
                         </div>
                         <div className="grid gap-1.5">
-                            <Label htmlFor="vat_rate">Stawka VAT (kwoty brutto w Rozliczeniach)</Label>
+                            <Label htmlFor="vat_rate">VAT</Label>
                             <NativeSelect id="vat_rate" value={form.data.vat_rate} onChange={(e) => form.setData('vat_rate', e.target.value)}>
+                                <option value="zw">Nie jestem płatnikiem VAT – jedna kwota</option>
                                 <option value="23">23%</option>
                                 <option value="8">8%</option>
                                 <option value="5">5%</option>
                                 <option value="0">0%</option>
-                                <option value="zw">zwolniony z VAT (zw.)</option>
                             </NativeSelect>
-                            <p className="text-muted-foreground text-xs">Kwoty wpisujesz netto – panel pokazuje obok kwotę brutto wg tej stawki.</p>
+                            <p className="text-muted-foreground text-xs">
+                                Bez VAT panel, oferty i rozliczenia pokazują jedną kwotę (bez netto/brutto). Ze stawką VAT – kwoty netto z brutto
+                                obok, oferty doliczają VAT.
+                            </p>
                             <InputError message={form.errors.vat_rate} />
                         </div>
                     </div>

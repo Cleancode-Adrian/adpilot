@@ -1,4 +1,4 @@
-import { NativeSelect } from '@/components/adpilot/ui';
+import { NativeSelect, useVat } from '@/components/adpilot/ui';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ export interface AgencyProps {
 
 export default function AgencyForm({ agency }: { agency: AgencyProps | null }) {
     const { admin } = usePage<SharedData>().props;
+    const { net } = useVat();
     const { data, setData, post, processing, errors, transform } = useForm({
         name: agency?.name ?? '',
         website_url: agency?.website_url ?? '',
@@ -185,7 +186,7 @@ export default function AgencyForm({ agency }: { agency: AgencyProps | null }) {
                         <div className="mb-4 grid gap-4 sm:grid-cols-3">
                             {field(
                                 'hourly_rate',
-                                `Stawka godzinowa netto (${data.currency})`,
+                                `Stawka godzinowa${net} (${data.currency})`,
                                 { type: 'number', step: '0.01', min: 0, placeholder: '120' },
                                 'Do rozliczenia prac bez wpisanej kwoty: czas × stawka.',
                             )}

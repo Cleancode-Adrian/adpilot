@@ -1,5 +1,5 @@
 import { type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
-import { EmptyState, NetGross, Section } from '@/components/adpilot/ui';
+import { EmptyState, NetGross, Section, useVat } from '@/components/adpilot/ui';
 import AppLayout from '@/layouts/app-layout';
 import { money } from '@/lib/format';
 import { Head } from '@inertiajs/react';
@@ -36,6 +36,7 @@ export default function Billing({
         </div>
     );
     const pln = (v: number) => money(v, 'PLN', 2);
+    const { net } = useVat();
 
     return (
         <AppLayout breadcrumbs={[{ title: 'Rozliczenia', href: '/billing' }]}>
@@ -46,12 +47,12 @@ export default function Billing({
                     {tile(
                         'Przychód w tym miesiącu',
                         <NetGross value={mrrSubscriptions + extraThisMonth} size="lg" />,
-                        `abonamenty ${pln(mrrSubscriptions)} + prace dodatkowe ${pln(extraThisMonth)} (netto)`,
+                        `abonamenty ${pln(mrrSubscriptions)} + prace dodatkowe ${pln(extraThisMonth)}${net ? ' (netto)' : ''}`,
                     )}
                     {tile(
                         'Abonamenty miesięcznie (MRR)',
                         <NetGross value={mrrSubscriptions} size="lg" />,
-                        `stałe usługi; z domenami, hostingami i licencjami: ${pln(mrr)} / mies. netto`,
+                        `stałe usługi; z domenami, hostingami i licencjami: ${pln(mrr)} / mies.${net}`,
                     )}
                     {tile(
                         'Do zafakturowania',

@@ -206,12 +206,12 @@ export default function QuoteEdit({ quote, public_url, pdf_url }: { quote: Quote
                             <div className="grid gap-1.5">
                                 <Label>VAT</Label>
                                 <NativeSelect value={d.vat} onChange={(e) => set('vat', e.target.value)}>
+                                    <option value="zw">bez VAT</option>
                                     {['23', '8', '5', '0'].map((v) => (
                                         <option key={v} value={v}>
                                             {v}%
                                         </option>
                                     ))}
-                                    <option value="zw">zw. (bez VAT)</option>
                                 </NativeSelect>
                             </div>
                             <div className="grid gap-1.5">
@@ -238,7 +238,7 @@ export default function QuoteEdit({ quote, public_url, pdf_url }: { quote: Quote
 
                 <Section
                     title={`Pozycje (${d.items.length})`}
-                    description="Ceny netto. Pozycje „miesięcznie/rocznie” sumują się osobno (abonament)."
+                    description={`${d.vat === 'zw' ? 'Ceny końcowe (bez VAT).' : 'Ceny netto.'} Pozycje „miesięcznie/rocznie” sumują się osobno (abonament).`}
                     actions={
                         !locked && (
                             <Button
@@ -287,7 +287,7 @@ export default function QuoteEdit({ quote, public_url, pdf_url }: { quote: Quote
                                             value={it.unit_price}
                                             onChange={(e) => setItem(i, { unit_price: Number(e.target.value) })}
                                             className="w-28"
-                                            aria-label="Cena netto"
+                                            aria-label="Cena"
                                         />
                                         <NativeSelect
                                             value={it.recurring}
@@ -349,8 +349,8 @@ export default function QuoteEdit({ quote, public_url, pdf_url }: { quote: Quote
                                 <div key={t.key} className="flex justify-between gap-4 border-t pt-1">
                                     <span className="text-muted-foreground">{t.label}</span>
                                     <span className="tabular-nums">
-                                        <strong>{money(t.net, d.currency, 2)}</strong> netto · {money(t.gross, d.currency, 2)}{' '}
-                                        {d.vat === 'zw' ? '' : 'brutto'}
+                                        <strong>{money(t.net, d.currency, 2)}</strong>
+                                        {d.vat !== 'zw' && ` netto · ${money(t.gross, d.currency, 2)} brutto`}
                                     </span>
                                 </div>
                             ))}

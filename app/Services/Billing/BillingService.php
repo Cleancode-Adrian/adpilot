@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Mail\ClientAlertMail;
 use App\Models\BillingItem;
+use App\Models\Setting;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
@@ -33,7 +34,7 @@ class BillingService
                 'title' => $title,
                 'description' => collect([
                     $b->provider ? 'Dostawca: '.$b->provider : null,
-                    $b->amount ? 'Kwota: '.number_format($b->amount, 2, ',', ' ').' '.$b->currency.' netto ('.BillingItem::PERIOD_LABELS[$b->period].')' : null,
+                    $b->amount ? 'Kwota: '.number_format($b->amount, 2, ',', ' ').' '.$b->currency.Setting::netSuffix().' ('.BillingItem::PERIOD_LABELS[$b->period].')' : null,
                     $b->auto_renew ? 'Odnawia się automatycznie – sprawdź, czy płatność przeszła.' : null,
                     'Po wykonaniu kliknij „Rozliczono / odnowiono” w zakładce Rozliczenia klienta.',
                 ])->filter()->implode("\n"),

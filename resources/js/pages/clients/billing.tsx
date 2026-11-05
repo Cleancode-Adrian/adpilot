@@ -37,13 +37,13 @@ export default function ClientBilling({
     const [mode, setMode] = useState<'add' | number | null>(null);
     const active = items.filter((i) => i.active);
     const mrr = active.reduce((s, i) => s + i.monthly_value, 0);
-    const { vat, gross } = useVat();
+    const { vat, gross, net } = useVat();
 
     return (
         <ClientLayout client={client} title="Oferty i rozliczenia">
             <Section
                 title="Abonamenty, domeny, hostingi, licencje"
-                description={`Przypomnienie przychodzi e-mailem i jako zadanie u klienta – przed fakturą lub odnowieniem. Przychód miesięczny od klienta: ${money(mrr, client.currency, 2)} netto (${vat === null ? 'zw. z VAT' : `${money(gross(mrr), client.currency, 2)} brutto`}).`}
+                description={`Przypomnienie przychodzi e-mailem i jako zadanie u klienta – przed fakturą lub odnowieniem. Przychód miesięczny od klienta: ${money(mrr, client.currency, 2)}${net}${vat === null ? '' : ` (${money(gross(mrr), client.currency, 2)} brutto)`}.`}
                 actions={
                     mode !== 'add' && (
                         <Button size="sm" onClick={() => setMode('add')}>

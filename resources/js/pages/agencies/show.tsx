@@ -1,5 +1,5 @@
 import { ClientCard, type ClientRow } from '@/components/adpilot/client-card';
-import { EmptyState, NativeSelect, Section } from '@/components/adpilot/ui';
+import { EmptyState, NativeSelect, Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type SharedData } from '@/types';
@@ -22,6 +22,7 @@ export default function AgencyShow({
     unassigned: SiteRef[];
 }) {
     const { admin } = usePage<SharedData>().props;
+    const { net } = useVat();
     const [attachId, setAttachId] = useState('');
     const down = clients.filter((c) => c.site_down).length;
     const overdue = clients.reduce((n, c) => n + (c.care?.overdue ?? 0), 0);
@@ -121,7 +122,7 @@ export default function AgencyShow({
                             {agency.tax_id && <li className="text-muted-foreground text-xs">NIP: {agency.tax_id}</li>}
                             {agency.hourly_rate !== null && (
                                 <li className="text-muted-foreground text-xs">
-                                    Stawka: {agency.hourly_rate.toLocaleString('pl-PL')} {agency.currency}/h netto
+                                    Stawka: {agency.hourly_rate.toLocaleString('pl-PL')} {agency.currency}/h{net}
                                 </li>
                             )}
                             {!contact && (
