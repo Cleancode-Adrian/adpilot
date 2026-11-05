@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Client;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Reports\AiReportWriter;
@@ -13,7 +12,6 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Throwable;
 
@@ -72,6 +70,7 @@ class AdminController extends Controller
             'agency_website' => 'nullable|string|max:150',
             'brand_color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'report_footer' => 'nullable|string|max:500',
+            'vat_rate' => ['nullable', 'regex:/^(zw|\d{1,2}(\.\d{1,2})?)$/'],
             'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
             'remove_logo' => 'boolean',
         ]);
@@ -155,5 +154,4 @@ class AdminController extends Controller
 
         return back()->with('success', 'Usunięto użytkownika.');
     }
-
 }

@@ -1,3 +1,4 @@
+import { NetGross } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { date } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -225,7 +226,8 @@ export function CareTaskRow({ task, showPeriod = false }: { task: CareTask; show
                         )}
                         {isAdmin && !!task.amount && (
                             <span className="text-muted-foreground inline-flex items-center gap-1">
-                                <Banknote className="size-3" /> {task.amount.toLocaleString('pl-PL')} zł{task.invoiced_at ? ' · zafakturowano' : ''}
+                                <Banknote className="size-3" /> <NetGross value={task.amount} />
+                                {task.invoiced_at ? ' · zafakturowano' : ''}
                             </span>
                         )}
                         {!task.care_template_id && <span className="text-muted-foreground">jednorazowe</span>}

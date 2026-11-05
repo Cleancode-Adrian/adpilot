@@ -2,6 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CareTask;
+use App\Models\Setting;
+use App\Models\SiteMonitor;
+use App\Models\WpEvent;
+use App\Services\SystemStatus;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -46,15 +51,17 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'invite_link' => fn () => $request->session()->get('invite_link'),
             ],
-            'brand' => fn () => \App\Models\Setting::brand(),
+            'brand' => fn () => Setting::brand(),
+            // stawka VAT do pokazywania kwot brutto obok netto (null = zwolniony z VAT)
+            'vat_rate' => fn () => Setting::vatRate(),
             // Licznik w menu „Opieka”: zadania po terminie i na dziś (aktywni klienci)
-            'care_due' => fn () => $request->user() ? \App\Models\CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
+            'care_due' => fn () => $request->user() ? CareTask::due()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             // Alerty WordPress do sprawdzenia (krytyczne i ostrzeżenia) – znaczek przy „Wszyscy klienci”
-            'wp_alerts' => fn () => $request->user() ? \App\Models\WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->count() : 0,
+            'wp_alerts' => fn () => $request->user() ? WpEvent::alerts()->whereHas('client', fn ($q) => $q->active())->count() : 0,
             'vault' => fn () => ['unlocked_until' => (int) $request->session()->get('vault.unlocked_until') ?: null, 'seconds' => (int) config('adpilot.security.vault_unlock_seconds')],
-            'sites_down' => fn () => $request->user() ? \App\Models\SiteMonitor::where('enabled', true)->where('status', 'down')->whereHas('client', fn ($q) => $q->active())->count() : 0,
+            'sites_down' => fn () => $request->user() ? SiteMonitor::where('enabled', true)->where('status', 'down')->whereHas('client', fn ($q) => $q->active())->count() : 0,
             'admin' => fn () => $request->user()?->is_admin ? [
-                'problems' => app(\App\Services\SystemStatus::class)->problemCount(),
+                'problems' => app(SystemStatus::class)->problemCount(),
             ] : null,
         ];
     }

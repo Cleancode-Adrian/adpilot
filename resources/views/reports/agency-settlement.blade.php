@@ -54,7 +54,7 @@
         </tr>
     </table>
     <p class="ink2">
-        Kwoty netto. Wartość pracy: kwota ustalona dla zadania, a gdy jej brak – czas pracy × stawka
+        Kwoty netto (suma brutto na końcu). Wartość pracy: kwota ustalona dla zadania, a gdy jej brak – czas pracy × stawka
         {{ $d['rate'] ? $money($d['rate']).'/h' : '(stawka godzinowa nie została ustalona)' }}.
     </p>
 
@@ -104,7 +104,14 @@
     @endif
 
     <table class="list" style="margin-top: 18px">
-        <tr class="total"><td>Razem do rozliczenia (prace + abonamenty)</td><td class="num">{{ $money($t['work'] + $t['subscriptions']) }}</td></tr>
+        @php $net = $t['work'] + $t['subscriptions']; $vat = $d['vat_rate'] ?? null; @endphp
+        <tr class="total"><td>Razem do rozliczenia netto (prace + abonamenty)</td><td class="num">{{ $money($net) }}</td></tr>
+        @if($vat !== null)
+            <tr><td>VAT {{ rtrim(rtrim(number_format($vat, 2, ',', ''), '0'), ',') }}%</td><td class="num">{{ $money(round($net * $vat / 100, 2)) }}</td></tr>
+            <tr class="total"><td>Razem brutto</td><td class="num">{{ $money(round($net * (1 + $vat / 100), 2)) }}</td></tr>
+        @else
+            <tr><td colspan="2" class="ink2">Sprzedawca zwolniony z VAT – kwota netto jest kwotą do zapłaty.</td></tr>
+        @endif
     </table>
 
     <p class="muted" style="margin-top: 24px">

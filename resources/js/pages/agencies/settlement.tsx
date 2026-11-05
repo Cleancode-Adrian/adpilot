@@ -1,4 +1,4 @@
-import { EmptyState, Section } from '@/components/adpilot/ui';
+import { EmptyState, NetGross, Section } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -39,7 +39,7 @@ interface Data {
     totals: { tasks: number; minutes: number; work: number; subscriptions: number; open: number; open_tasks: number; unpriced: number };
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <div className="bg-card rounded-xl border p-4">
             <div className="text-muted-foreground text-sm">{label}</div>
@@ -113,8 +113,8 @@ export default function AgencySettlement({
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Tile label="Wykonane prace" value={String(data.totals.tasks)} />
                     <Tile label="Czas pracy" value={fmtTime(data.totals.minutes)} />
-                    <Tile label="Wartość prac" value={m2(data.totals.work)} />
-                    <Tile label="Do zafakturowania (prace)" value={m2(data.totals.open)} />
+                    <Tile label="Wartość prac" value={<NetGross value={data.totals.work} currency={cur} size="lg" />} />
+                    <Tile label="Do zafakturowania (prace)" value={<NetGross value={data.totals.open} currency={cur} size="lg" />} />
                 </div>
                 {data.totals.unpriced > 0 && (
                     <p className="text-muted-foreground text-sm">
@@ -218,7 +218,9 @@ export default function AgencySettlement({
                             </Section>
                         )}
 
-                        <p className="text-right text-base font-semibold">Razem do rozliczenia: {m2(data.totals.work + data.totals.subscriptions)}</p>
+                        <p className="text-right text-base font-semibold">
+                            Razem do rozliczenia: <NetGross value={data.totals.work + data.totals.subscriptions} currency={cur} />
+                        </p>
                     </>
                 )}
             </div>

@@ -5,6 +5,48 @@ import { usePage } from '@inertiajs/react';
 import { AlertOctagon, AlertTriangle, ArrowDownRight, ArrowUpRight, CheckCircle2, Info, Lightbulb, Minus, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+/** Stawka VAT z ustawień agencji (null = zwolniony) i przeliczenie netto → brutto. */
+export function useVat() {
+    const vat = usePage<SharedData>().props.vat_rate ?? null;
+    return { vat, gross: (net: number) => Math.round(net * (1 + (vat ?? 0) / 100) * 100) / 100 };
+}
+
+/**
+ * Kwota netto + brutto: „400,00 zł netto · 492,00 zł brutto”.
+ * size="lg" – duża kwota netto, brutto w drugiej linii (kafelki).
+ */
+export function NetGross({
+    value,
+    currency = 'PLN',
+    size = 'sm',
+    className,
+}: {
+    value: number | null;
+    currency?: string;
+    size?: 'sm' | 'lg';
+    className?: string;
+}) {
+    const { vat, gross } = useVat();
+    if (value === null || value === undefined) return <span className={className}>–</span>;
+    const fmt = (v: number) =>
+        new Intl.NumberFormat('pl-PL', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+    const g = vat === null ? 'zw. z VAT' : `${fmt(gross(value))} brutto`;
+    if (size === 'lg')
+        return (
+            <span className={cn('block', className)}>
+                <span className="block">
+                    {fmt(value)} <span className="text-muted-foreground text-sm font-normal">netto</span>
+                </span>
+                <span className="text-muted-foreground block text-sm font-normal">{g}</span>
+            </span>
+        );
+    return (
+        <span className={cn('tabular-nums', className)}>
+            {fmt(value)} netto <span className="text-muted-foreground font-normal">· {g}</span>
+        </span>
+    );
+}
+
 /** Komunikaty flash z backendu (sukces / błąd). */
 export function Flash() {
     const { flash } = usePage<SharedData>().props;

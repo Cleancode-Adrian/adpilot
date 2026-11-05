@@ -1,4 +1,4 @@
-import { NativeSelect } from '@/components/adpilot/ui';
+import { NativeSelect, NetGross } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,7 +76,7 @@ export function ExtraWorkList({ groups }: { groups: ExtraWork[] }) {
                         <Link href={`/clients/${g.client.id}/billing`} className="font-medium hover:underline">
                             {g.client.name}
                         </Link>
-                        <span className="ml-auto font-semibold tabular-nums">{money(g.total, g.client.currency, 2)} netto</span>
+                        <NetGross value={g.total} currency={g.client.currency} className="ml-auto font-semibold" />
                         <Button
                             size="sm"
                             variant="outline"
@@ -95,7 +95,7 @@ export function ExtraWorkList({ groups }: { groups: ExtraWork[] }) {
                                 <span>
                                     {t.title} <span className="text-muted-foreground text-xs">{date(t.done_at)}</span>
                                 </span>
-                                <span className="tabular-nums">{money(t.amount, g.client.currency, 2)}</span>
+                                <NetGross value={t.amount} currency={g.client.currency} className="text-right" />
                             </li>
                         ))}
                     </ul>
@@ -256,7 +256,7 @@ export function BillingRow({
                 {item.notes && <div className="text-muted-foreground text-xs">{item.notes}</div>}
             </div>
             <div className="text-sm tabular-nums">
-                {item.amount != null ? money(item.amount, item.currency, 2) : '–'}{' '}
+                <NetGross value={item.amount} currency={item.currency} />{' '}
                 <span className="text-muted-foreground text-xs">{periods[item.period]}</span>
             </div>
             <DueLabel item={item} />

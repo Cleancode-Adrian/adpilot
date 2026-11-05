@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\Agency;
 use App\Models\BillingItem;
 use App\Models\CareTask;
+use App\Models\Setting;
 use App\Services\Reports\WorkReportBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -91,6 +92,7 @@ class AgencySettlement
             'month_label' => WorkReportBuilder::monthLabel($month),
             'rate' => $rate,
             'currency' => $agency->currency ?: 'PLN',
+            'vat_rate' => Setting::vatRate(),
             'tasks' => $rows->values(),
             'sites' => $sites,
             'subscriptions' => $subscriptions->values(),

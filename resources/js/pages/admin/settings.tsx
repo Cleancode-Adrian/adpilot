@@ -1,4 +1,4 @@
-import { Section } from '@/components/adpilot/ui';
+import { NativeSelect, Section } from '@/components/adpilot/ui';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
         agency_website: settings.agency_website ?? '',
         brand_color: brand.color ?? '#2a78d6',
         report_footer: settings.report_footer ?? '',
+        vat_rate: settings.vat_rate ?? '23',
         logo: null as File | null,
         remove_logo: false as boolean,
     });
@@ -107,6 +108,18 @@ export default function AgencySettings({ settings, brand }: { settings: Record<s
                                 className="border-input bg-background rounded-md border px-3 py-2 text-sm"
                                 placeholder="np. W razie pytań jesteśmy do dyspozycji – zadzwoń lub odpisz na maila."
                             />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="vat_rate">Stawka VAT (kwoty brutto w Rozliczeniach)</Label>
+                            <NativeSelect id="vat_rate" value={form.data.vat_rate} onChange={(e) => form.setData('vat_rate', e.target.value)}>
+                                <option value="23">23%</option>
+                                <option value="8">8%</option>
+                                <option value="5">5%</option>
+                                <option value="0">0%</option>
+                                <option value="zw">zwolniony z VAT (zw.)</option>
+                            </NativeSelect>
+                            <p className="text-muted-foreground text-xs">Kwoty wpisujesz netto – panel pokazuje obok kwotę brutto wg tej stawki.</p>
+                            <InputError message={form.errors.vat_rate} />
                         </div>
                     </div>
                 </Section>

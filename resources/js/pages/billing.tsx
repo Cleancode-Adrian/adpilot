@@ -1,5 +1,5 @@
 import { type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
-import { EmptyState, Section } from '@/components/adpilot/ui';
+import { EmptyState, NetGross, Section } from '@/components/adpilot/ui';
 import AppLayout from '@/layouts/app-layout';
 import { money } from '@/lib/format';
 import { Head } from '@inertiajs/react';
@@ -7,6 +7,8 @@ import { Head } from '@inertiajs/react';
 export default function Billing({
     toInvoice,
     extraWork,
+    extraThisMonth,
+    extraOpen,
     renewals,
     all,
     mrr,
@@ -16,6 +18,8 @@ export default function Billing({
 }: {
     toInvoice: BillingItem[];
     extraWork: ExtraWork[];
+    extraThisMonth: number;
+    extraOpen: number;
     renewals: BillingItem[];
     all: BillingItem[];
     mrr: number;
@@ -24,13 +28,14 @@ export default function Billing({
     periods: Record<string, string>;
 }) {
     const invoiceSum = toInvoice.reduce((s, i) => s + (i.amount ?? 0), 0);
-    const tile = (label: string, value: string, hint: string) => (
+    const tile = (label: string, value: React.ReactNode, hint: string) => (
         <div className="bg-card rounded-xl border p-4">
             <div className="text-muted-foreground text-sm">{label}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
             <div className="text-muted-foreground mt-1 text-xs">{hint}</div>
         </div>
     );
+    const pln = (v: number) => money(v, 'PLN', 2);
 
     return (
         <AppLayout breadcrumbs={[{ title: 'Rozliczenia', href: '/billing' }]}>
@@ -38,22 +43,30 @@ export default function Billing({
             <div className="flex flex-col gap-4 p-4">
                 <h1 className="text-xl font-semibold">Rozliczenia i odnowienia</h1>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {tile('Przychód miesięczny (abonamenty)', money(mrrSubscriptions, 'PLN', 2), 'MRR netto – opieka, kampanie, inne stałe usługi')}
-                    {tile('Wszystkie pozycje / mies.', money(mrr, 'PLN', 2), 'z domenami, hostingami i licencjami w przeliczeniu na miesiąc')}
                     {tile(
-                        'Do zafakturowania w tym miesiącu',
-                        money(invoiceSum, 'PLN', 2),
-                        `${toInvoice.length} ${toInvoice.length === 1 ? 'abonament' : 'abonamentów'}`,
+                        'Przychód w tym miesiącu',
+                        <NetGross value={mrrSubscriptions + extraThisMonth} size="lg" />,
+                        `abonamenty ${pln(mrrSubscriptions)} + prace dodatkowe ${pln(extraThisMonth)} (netto)`,
+                    )}
+                    {tile(
+                        'Abonamenty miesięcznie (MRR)',
+                        <NetGross value={mrrSubscriptions} size="lg" />,
+                        `stałe usługi; z domenami, hostingami i licencjami: ${pln(mrr)} / mies. netto`,
+                    )}
+                    {tile(
+                        'Do zafakturowania',
+                        <NetGross value={invoiceSum + extraOpen} size="lg" />,
+                        `${toInvoice.length} ${toInvoice.length === 1 ? 'abonament' : 'abonamentów'} w tym miesiącu + prace dodatkowe ${pln(extraOpen)}`,
                     )}
                     {tile('Odnowienia w 60 dni', String(renewals.length), 'domeny, hostingi, licencje')}
                 </div>
 
                 <Section
-                    title="Do zafakturowania w tym miesiącu"
+                    title="Abonamenty do zafakturowania w tym miesiącu"
                     description="Po wystawieniu faktury kliknij „Rozliczono” – termin przesunie się o okres."
                 >
                     {toInvoice.length === 0 ? (
-                        <EmptyState title="Nic do zafakturowania w tym miesiącu" />
+                        <EmptyState title="Brak abonamentów do zafakturowania w tym miesiącu" />
                     ) : (
                         <ul className="divide-y">
                             {toInvoice.map((i) => (

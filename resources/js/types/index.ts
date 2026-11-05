@@ -27,6 +27,8 @@ export interface SharedData {
     quote?: { message: string; author: string };
     flash: { success?: string | null; error?: string | null; invite_link?: string | null };
     brand: Brand;
+    /** stawka VAT w % do kwot brutto; null = zwolniony z VAT */
+    vat_rate: number | null;
     admin: { problems: number } | null;
     care_due: number;
     wp_alerts: number;

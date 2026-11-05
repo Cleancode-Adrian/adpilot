@@ -28,7 +28,24 @@ class Setting extends Model
         'agency_logo' => null,          // ścieżka w storage/app/public
         'brand_color' => '#2a78d6',
         'report_footer' => null,
+        'vat_rate' => '23',             // stawka VAT do pokazywania kwot brutto; „zw” = zwolniony
     ];
+
+    /** Stawka VAT w procentach albo null, gdy firma jest zwolniona z VAT („zw”). */
+    public static function vatRate(): ?float
+    {
+        $v = (string) static::get('vat_rate', '23');
+
+        return is_numeric($v) ? (float) $v : null;
+    }
+
+    /** Kwota brutto z netto wg stawki z ustawień. */
+    public static function gross(?float $net): ?float
+    {
+        $vat = static::vatRate();
+
+        return $net === null ? null : round($net * (1 + ($vat ?? 0) / 100), 2);
+    }
 
     public static function all_(): array
     {

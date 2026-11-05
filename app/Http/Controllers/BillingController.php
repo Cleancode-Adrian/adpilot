@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\BillingItem;
+use App\Models\CareTask;
 use App\Models\Client;
+use App\Models\Quote;
 use App\Services\Billing\BillingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -22,12 +24,19 @@ class BillingController extends Controller
         $in60 = CarbonImmutable::today()->addDays(60);
 
         $row = fn (BillingItem $b) => [...$b->toArray(), 'days_left' => $b->daysLeft(), 'monthly_value' => $b->monthlyValue()];
+        $extraWork = $this->extraWork();
 
         return Inertia::render('billing', [
+            // prace dodatkowe wykonane w tym miesiącu (zafakturowane i nie) – część przychodu miesiąca
+            'extraThisMonth' => round((float) CareTask::where('status', 'done')->where('amount', '>', 0)
+                ->whereBetween('done_at', [CarbonImmutable::today()->startOfMonth(), $endOfMonth->endOfDay()])
+                ->whereHas('client', fn ($q) => $q->active())->sum('amount'), 2),
+            // wszystkie niezafakturowane prace dodatkowe
+            'extraOpen' => round(collect($extraWork)->sum('total'), 2),
             'toInvoice' => $items->where('type', 'subscription')->filter(fn ($b) => $b->next_date && CarbonImmutable::parse($b->next_date)->lte($endOfMonth))->map($row)->values(),
             'renewals' => $items->where('type', '!=', 'subscription')->filter(fn ($b) => $b->next_date && CarbonImmutable::parse($b->next_date)->lte($in60))->map($row)->values(),
             'all' => $items->map($row)->values(),
-            'extraWork' => $this->extraWork(),
+            'extraWork' => $extraWork,
             'mrr' => round($items->sum(fn ($b) => $b->monthlyValue()), 2),
             'mrrSubscriptions' => round($items->where('type', 'subscription')->sum(fn ($b) => $b->monthlyValue()), 2),
             'types' => BillingItem::TYPES,
@@ -43,7 +52,7 @@ class BillingController extends Controller
                 ->map(fn (BillingItem $b) => [...$b->toArray(), 'days_left' => $b->daysLeft(), 'monthly_value' => $b->monthlyValue()]),
             'extraWork' => $this->extraWork($client->id),
             'quotes' => $client->quotes()->with('items')->latest('id')->get()
-                ->map(fn (\App\Models\Quote $q) => [...$q->only(['id', 'number', 'title', 'status', 'currency']), 'totals' => $q->totals(), 'expired' => $q->isExpired()]),
+                ->map(fn (Quote $q) => [...$q->only(['id', 'number', 'title', 'status', 'currency']), 'totals' => $q->totals(), 'expired' => $q->isExpired()]),
             'types' => BillingItem::TYPES,
             'periods' => BillingItem::PERIOD_LABELS,
         ]);
@@ -52,7 +61,7 @@ class BillingController extends Controller
     /** Wykonane zadania z kwotą, jeszcze niezafakturowane – pogrupowane wg klienta. */
     private function extraWork(?int $clientId = null): array
     {
-        return \App\Models\CareTask::where('status', 'done')->whereNotNull('amount')->where('amount', '>', 0)->whereNull('invoiced_at')
+        return CareTask::where('status', 'done')->whereNotNull('amount')->where('amount', '>', 0)->whereNull('invoiced_at')
             ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->whereHas('client', fn ($q) => $q->active())->with('client:id,name,currency')->orderBy('done_at')->get()
             ->groupBy('client_id')->map(fn ($tasks) => [

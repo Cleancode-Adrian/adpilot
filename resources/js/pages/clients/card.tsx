@@ -1,5 +1,5 @@
 import { CareProgress, CareTaskRow, formatMinutes, localDate } from '@/components/adpilot/care-task-row';
-import { Section } from '@/components/adpilot/ui';
+import { NetGross, Section } from '@/components/adpilot/ui';
 import { CopyButton, SecretValue } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,8 +109,13 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                                     <CareProgress done={client.care.done} total={client.care.total} />
                                     {!!client.care.amount && (
                                         <span className="text-muted-foreground text-xs">
-                                            prace dodatkowe: {client.care.amount.toLocaleString('pl-PL')} zł
-                                            {!!client.care.amount_open && ` (do faktury: ${client.care.amount_open.toLocaleString('pl-PL')} zł)`}
+                                            prace dodatkowe: <NetGross value={client.care.amount} currency={client.currency} />
+                                            {!!client.care.amount_open && (
+                                                <>
+                                                    {' '}
+                                                    (do faktury: <NetGross value={client.care.amount_open} currency={client.currency} />)
+                                                </>
+                                            )}
                                         </span>
                                     )}
                                     {!!client.care.minutes && (

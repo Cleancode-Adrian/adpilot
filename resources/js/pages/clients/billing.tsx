@@ -1,5 +1,5 @@
 import { BillingForm, type BillingItem, BillingRow, type ExtraWork, ExtraWorkList } from '@/components/adpilot/billing';
-import { Section } from '@/components/adpilot/ui';
+import { Section, useVat } from '@/components/adpilot/ui';
 import { Button } from '@/components/ui/button';
 import ClientLayout from '@/layouts/client-layout';
 import { money } from '@/lib/format';
@@ -37,12 +37,13 @@ export default function ClientBilling({
     const [mode, setMode] = useState<'add' | number | null>(null);
     const active = items.filter((i) => i.active);
     const mrr = active.reduce((s, i) => s + i.monthly_value, 0);
+    const { vat, gross } = useVat();
 
     return (
         <ClientLayout client={client} title="Oferty i rozliczenia">
             <Section
                 title="Abonamenty, domeny, hostingi, licencje"
-                description={`Przypomnienie przychodzi e-mailem i jako zadanie u klienta – przed fakturą lub odnowieniem. Przychód miesięczny od klienta: ${money(mrr, client.currency, 2)} netto.`}
+                description={`Przypomnienie przychodzi e-mailem i jako zadanie u klienta – przed fakturą lub odnowieniem. Przychód miesięczny od klienta: ${money(mrr, client.currency, 2)} netto (${vat === null ? 'zw. z VAT' : `${money(gross(mrr), client.currency, 2)} brutto`}).`}
                 actions={
                     mode !== 'add' && (
                         <Button size="sm" onClick={() => setMode('add')}>
