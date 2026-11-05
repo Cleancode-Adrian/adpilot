@@ -14,13 +14,18 @@ import { FormEventHandler, useState } from 'react';
 export default function ClientForm({
     client,
     panel,
+    agencies = [],
+    agencyId = null,
 }: {
     client: ClientProps | null;
     panel?: { username: string | null; has_secret: boolean } | null;
+    agencies?: { id: number; name: string }[];
+    agencyId?: number | null;
 }) {
     const { admin } = usePage<SharedData>().props;
     const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, put, processing, errors } = useForm({
+        agency_id: (client ? client.agency_id : agencyId)?.toString() ?? '',
         name: client?.name ?? '',
         website_url: client?.website_url ?? '',
         admin_url: client?.admin_url ?? '',
@@ -88,6 +93,31 @@ export default function ClientForm({
                         {field('name', 'Nazwa klienta', { required: true, placeholder: 'np. Pracownia Zielony Ogród' })}
                         {field('website_url', 'Adres strony', { required: true, placeholder: 'zielony-ogrod.pl' })}
                         {field('industry', 'Branża', { placeholder: 'np. usługi ogrodnicze' })}
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="agency_id">Zlecenie od agencji</Label>
+                            <NativeSelect id="agency_id" value={data.agency_id} onChange={(e) => setData('agency_id', e.target.value)}>
+                                <option value="">— mój klient (bez agencji) —</option>
+                                {agencies.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </NativeSelect>
+                            <p className="text-muted-foreground text-xs">
+                                {agencies.length === 0 ? (
+                                    <>
+                                        Obsługujesz strony dla agencji?{' '}
+                                        <a href="/agencies/create" className="underline">
+                                            Dodaj agencję
+                                        </a>
+                                        .
+                                    </>
+                                ) : (
+                                    'Strona obsługiwana na zlecenie agencji – pojawi się w zakładce Agencje.'
+                                )}
+                            </p>
+                            <InputError message={errors.agency_id} />
+                        </div>
                     </div>
                 </div>
 
@@ -294,6 +324,12 @@ export default function ClientForm({
                                 />
                                 Wysyłaj klientowi automatycznie raport miesięczny z reklam (2. dnia miesiąca, na e-mail kontaktowy)
                             </label>
+                            {data.auto_send_reports && data.agency_id && (
+                                <p className="mt-2 text-xs text-[#a4471f] dark:text-[#ec835a]">
+                                    Ta strona jest obsługiwana na zlecenie agencji – upewnij się, że raport może iść do klienta końcowego (przy white
+                                    label wpisz e-mail agencji albo wyłącz wysyłkę).
+                                </p>
+                            )}
                         </div>
                     </>
                 )}

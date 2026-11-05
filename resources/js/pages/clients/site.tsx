@@ -5,10 +5,11 @@ import ClientLayout from '@/layouts/client-layout';
 import { date, dateTime, num } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type ClientProps } from '@/types/adpilot';
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
     AlertOctagon,
     AlertTriangle,
+    Bot,
     CheckCircle2,
     ChevronDown,
     Download,
@@ -349,6 +350,11 @@ export default function Site({
                                     <a href={pdf_url!}>
                                         <Download className="size-4" /> PDF
                                     </a>
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={`${base}/llms-txt`}>
+                                        <Bot className="size-4" /> Generator llms.txt
+                                    </Link>
                                 </Button>
                             </>
                         )}

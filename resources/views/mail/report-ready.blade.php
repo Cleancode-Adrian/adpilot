@@ -1,4 +1,4 @@
-<x-mail::message>
+<x-mail::message :brand="$agency" :brand-url="$brandUrl">
 # Dzień dobry,
 
 @if($report->type === 'work')
@@ -21,5 +21,5 @@ Zobacz raport online
 W razie pytań – po prostu odpisz na tę wiadomość.
 
 Pozdrawiamy,<br>
-{{ \App\Models\Setting::brand()['name'] }}
+{{ $agency }}
 </x-mail::message>

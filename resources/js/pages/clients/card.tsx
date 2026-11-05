@@ -8,7 +8,7 @@ import { money, num } from '@/lib/format';
 import { type SharedData } from '@/types';
 import { type CareTask, type ClientProps } from '@/types/adpilot';
 import { Link, router, useForm, usePage } from '@inertiajs/react';
-import { Briefcase, Check, ExternalLink, KeyRound, LogIn, Mail, Megaphone, Pencil, Phone, Plus, ShieldCheck, User } from 'lucide-react';
+import { Briefcase, Check, ExternalLink, Handshake, KeyRound, LogIn, Mail, Megaphone, Pencil, Phone, Plus, ShieldCheck, User } from 'lucide-react';
 import { useState } from 'react';
 
 type Kpi = { value: number | null };
@@ -239,6 +239,18 @@ export default function ClientCard({ client, upcoming, adsKpis }: { client: Clie
                                         uzupełnij
                                     </Link>
                                     .
+                                </li>
+                            )}
+                            {client.agency && (
+                                <li className="flex items-center gap-2">
+                                    <Handshake className="text-muted-foreground size-4" />
+                                    <span>
+                                        Zlecenie od agencji{' '}
+                                        <Link href={`/agencies/${client.agency.id}`} className="font-medium hover:underline">
+                                            {client.agency.name}
+                                        </Link>
+                                        {client.agency.white_label && <span className="text-muted-foreground text-xs"> · white label</span>}
+                                    </span>
                                 </li>
                             )}
                             {client.industry && <li className="text-muted-foreground text-xs">Branża: {client.industry}</li>}

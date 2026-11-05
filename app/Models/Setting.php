@@ -13,8 +13,11 @@ use Throwable;
 class Setting extends Model
 {
     protected $primaryKey = 'key';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
+
     protected $fillable = ['key', 'value'];
 
     public const DEFAULTS = [
@@ -51,6 +54,17 @@ class Setting extends Model
             static::updateOrCreate(['key' => $k], ['value' => $v]);
         }
         Cache::forget('adpilot.settings');
+    }
+
+    /**
+     * Marka widoczna dla danego klienta: przy stronach agencji white label – marka agencji,
+     * w pozostałych przypadkach – Twoja (z ustawień).
+     */
+    public static function brandFor(?Client $client): array
+    {
+        $agency = $client?->agency;
+
+        return $agency && $agency->white_label ? $agency->brand() : static::brand() + ['white_label' => false];
     }
 
     /** Dane marki używane w panelu, raportach i mailach. */

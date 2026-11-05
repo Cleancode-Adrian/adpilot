@@ -3,12 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\SyncClientJob;
+use App\Models\Agency;
 use App\Models\Client;
+use App\Models\ClientCredential;
 use App\Services\Analysis\Metrics;
+use App\Services\Care\CarePlanner;
 use App\Services\Connectors\GoogleAuth;
 use App\Services\Connectors\MetaConnector;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ClientController extends Controller
@@ -17,15 +23,31 @@ class ClientController extends Controller
     public function index(Request $request)
     {
         $archived = $request->boolean('archived');
-        $planner = app(\App\Services\Care\CarePlanner::class);
 
-        $clients = Client::query()
-            ->when($archived, fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->active())
+        $clients = self::rows(Client::query()
+            ->when($archived, fn ($q) => $q->whereNotNull('archived_at'), fn ($q) => $q->active()));
+
+        return Inertia::render('clients/index', [
+            'clients' => $clients,
+            'showArchived' => $archived,
+            'archivedCount' => Client::whereNotNull('archived_at')->count(),
+            'agencies' => Agency::orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /** Wiersze kart klientów (lista klientów i strony agencji). */
+    public static function rows($query): Collection
+    {
+        $planner = app(CarePlanner::class);
+
+        return $query
+            ->with('agency:id,name')
             ->withCount(['credentials', 'recommendations as open_count' => fn ($q) => $q->open()])
             ->orderBy('is_demo')->orderBy('name')->get()
             ->map(fn (Client $c) => [
-                ...$c->only(['id', 'name', 'website_url', 'admin_url', 'industry', 'has_ads', 'has_care', 'has_general', 'contact_name', 'contact_email', 'contact_phone', 'is_demo', 'archived_at']),
-                'notes_excerpt' => $c->notes ? \Illuminate\Support\Str::limit($c->notes, 140) : null,
+                ...$c->only(['id', 'agency_id', 'name', 'website_url', 'admin_url', 'industry', 'has_ads', 'has_care', 'has_general', 'contact_name', 'contact_email', 'contact_phone', 'is_demo', 'archived_at']),
+                'agency_name' => $c->agency?->name,
+                'notes_excerpt' => $c->notes ? Str::limit($c->notes, 140) : null,
                 'credentials_count' => $c->credentials_count,
                 'open_count' => $c->has_ads ? $c->open_count : 0,
                 'care' => $c->has_care || $c->has_general ? $planner->summary($c) : null,
@@ -34,17 +56,23 @@ class ClientController extends Controller
                 'ssl_days' => $c->siteMonitor?->sslDaysLeft(),
                 'wp_connected' => $c->wpSite?->status === 'connected',
             ]);
+    }
 
-        return Inertia::render('clients/index', [
-            'clients' => $clients,
-            'showArchived' => $archived,
-            'archivedCount' => Client::whereNotNull('archived_at')->count(),
+    public function create(Request $request)
+    {
+        return Inertia::render('clients/form', [
+            'client' => null,
+            'agencies' => $this->agencyOptions(),
+            'agencyId' => $request->integer('agency') ?: null,
         ]);
     }
 
-    public function create()
+    /** Agencje do wyboru w formularzu (aktywne + obecna agencja klienta, nawet jeśli zarchiwizowana). */
+    private function agencyOptions(?int $current = null)
     {
-        return Inertia::render('clients/form', ['client' => null]);
+        return Agency::query()
+            ->where(fn ($q) => $q->whereNull('archived_at')->when($current, fn ($q) => $q->orWhere('id', $current)))
+            ->orderBy('name')->get(['id', 'name']);
     }
 
     public function store(Request $request)
@@ -69,7 +97,7 @@ class ClientController extends Controller
     {
         $panel = $request->user()->is_admin ? $this->panelCredential($client) : null;
 
-        return Inertia::render('clients/form', ['client' => $client, 'panel' => $panel ? ['username' => $panel->username, 'has_secret' => filled($panel->getRawOriginal('secret'))] : null]);
+        return Inertia::render('clients/form', ['client' => $client, 'agencies' => $this->agencyOptions($client->agency_id), 'panel' => $panel ? ['username' => $panel->username, 'has_secret' => filled($panel->getRawOriginal('secret'))] : null]);
     }
 
     public function update(Request $request, Client $client)
@@ -90,9 +118,9 @@ class ClientController extends Controller
     /** Karta klienta: dane, kontakt, logowanie do strony, notatki, skrót opieki i reklam. */
     public function show(Client $client)
     {
-        $period = \App\Services\Care\CarePlanner::period();
+        $period = CarePlanner::period();
         if ($client->has_care) {
-            app(\App\Services\Care\CarePlanner::class)->ensureMonth($client);
+            app(CarePlanner::class)->ensureMonth($client);
         }
 
         return Inertia::render('clients/card', [
@@ -173,13 +201,14 @@ class ClientController extends Controller
         $client->load('integrations');
 
         return [
-            ...$client->only(['id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
+            ...$client->only(['id', 'agency_id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa', 'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at']),
+            'agency' => $client->agency?->only(['id', 'name', 'white_label']),
             'open_count' => $client->recommendations()->open()->count(),
             'integrations' => $client->integrations->map->only(['id', 'provider', 'status', 'settings', 'last_synced_at', 'last_error']),
             'lead_event_names' => $client->leadEventNames(),
             'google_configured' => GoogleAuth::configured(),
             'meta_configured' => MetaConnector::configured(),
-            'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(\App\Services\Care\CarePlanner::class)->summary($client) : null,
+            'care' => $client->careTemplates()->exists() || $client->careTasks()->exists() ? app(CarePlanner::class)->summary($client) : null,
             'credentials_count' => $client->credentials()->count(),
             'site' => ($mon = $client->siteMonitor) ? [
                 'status' => $mon->enabled ? $mon->status : 'off',
@@ -201,7 +230,7 @@ class ClientController extends Controller
     }
 
     /** Pierwszy zapisany dostęp do panelu strony (kategoria „cms”). */
-    private function panelCredential(Client $client): ?\App\Models\ClientCredential
+    private function panelCredential(Client $client): ?ClientCredential
     {
         return $client->credentials()->where('category', 'cms')->orderBy('id')->first();
     }
@@ -243,6 +272,7 @@ class ClientController extends Controller
     private function validated(Request $request): array
     {
         $data = $request->validate([
+            'agency_id' => 'nullable|integer|exists:agencies,id',
             'name' => 'required|string|max:150',
             'website_url' => 'required|string|max:255',
             'has_ads' => 'boolean',
@@ -265,7 +295,7 @@ class ClientController extends Controller
         ]);
         $url = Client::normalizeUrl($data['website_url']);
         if (! $url) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['website_url' => 'Nieprawidłowy adres strony – wpisz np. projekciarz.pl lub https://projekciarz.pl']);
+            throw ValidationException::withMessages(['website_url' => 'Nieprawidłowy adres strony – wpisz np. projekciarz.pl lub https://projekciarz.pl']);
         }
         $data['website_url'] = $url;
         $data['currency'] = strtoupper($data['currency'] ?? 'PLN');

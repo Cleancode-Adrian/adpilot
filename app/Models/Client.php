@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
@@ -10,7 +11,7 @@ use Illuminate\Support\Str;
 class Client extends Model
 {
     protected $fillable = [
-        'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
+        'agency_id', 'name', 'website_url', 'has_ads', 'has_care', 'has_general', 'admin_url', 'contact_name', 'contact_phone', 'industry', 'goal', 'lead_events', 'currency', 'target_roas', 'target_cpa',
         'monthly_budget', 'daily_budget', 'contact_email', 'auto_send_reports', 'notes', 'is_demo', 'archived_at',
     ];
 
@@ -97,23 +98,95 @@ class Client extends Model
         return $query->where('has_ads', true);
     }
 
-    public function integrations(): HasMany { return $this->hasMany(Integration::class); }
-    public function campaigns(): HasMany { return $this->hasMany(Campaign::class); }
-    public function ads(): HasMany { return $this->hasMany(Ad::class); }
-    public function searchTerms(): HasMany { return $this->hasMany(SearchTerm::class); }
-    public function analytics(): HasMany { return $this->hasMany(AnalyticsDaily::class); }
-    public function audits(): HasMany { return $this->hasMany(TrackingAudit::class); }
-    public function recommendations(): HasMany { return $this->hasMany(Recommendation::class); }
-    public function reports(): HasMany { return $this->hasMany(Report::class); }
-    public function careTemplates(): HasMany { return $this->hasMany(CareTemplate::class)->orderBy('position')->orderBy('id'); }
-    public function careTasks(): HasMany { return $this->hasMany(CareTask::class); }
-    public function credentials(): HasMany { return $this->hasMany(ClientCredential::class); }
-    public function wpSite(): HasOne { return $this->hasOne(WpSite::class); }
-    public function siteMonitor(): HasOne { return $this->hasOne(SiteMonitor::class); }
-    public function siteAudits(): HasMany { return $this->hasMany(SiteAudit::class); }
-    public function billingItems(): HasMany { return $this->hasMany(BillingItem::class); }
-    public function quotes(): HasMany { return $this->hasMany(Quote::class); }
-    public function wpEvents(): HasMany { return $this->hasMany(WpEvent::class); }
+    public function agency(): BelongsTo
+    {
+        return $this->belongsTo(Agency::class);
+    }
+
+    public function integrations(): HasMany
+    {
+        return $this->hasMany(Integration::class);
+    }
+
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
+    }
+
+    public function ads(): HasMany
+    {
+        return $this->hasMany(Ad::class);
+    }
+
+    public function searchTerms(): HasMany
+    {
+        return $this->hasMany(SearchTerm::class);
+    }
+
+    public function analytics(): HasMany
+    {
+        return $this->hasMany(AnalyticsDaily::class);
+    }
+
+    public function audits(): HasMany
+    {
+        return $this->hasMany(TrackingAudit::class);
+    }
+
+    public function recommendations(): HasMany
+    {
+        return $this->hasMany(Recommendation::class);
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class);
+    }
+
+    public function careTemplates(): HasMany
+    {
+        return $this->hasMany(CareTemplate::class)->orderBy('position')->orderBy('id');
+    }
+
+    public function careTasks(): HasMany
+    {
+        return $this->hasMany(CareTask::class);
+    }
+
+    public function credentials(): HasMany
+    {
+        return $this->hasMany(ClientCredential::class);
+    }
+
+    public function wpSite(): HasOne
+    {
+        return $this->hasOne(WpSite::class);
+    }
+
+    public function siteMonitor(): HasOne
+    {
+        return $this->hasOne(SiteMonitor::class);
+    }
+
+    public function siteAudits(): HasMany
+    {
+        return $this->hasMany(SiteAudit::class);
+    }
+
+    public function billingItems(): HasMany
+    {
+        return $this->hasMany(BillingItem::class);
+    }
+
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class);
+    }
+
+    public function wpEvents(): HasMany
+    {
+        return $this->hasMany(WpEvent::class);
+    }
 
     public function latestAudit(): HasOne
     {

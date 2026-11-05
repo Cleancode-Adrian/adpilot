@@ -19,13 +19,19 @@ use Throwable;
 class SiteAuditor
 {
     private const UA = 'Mozilla/5.0 (compatible; CC-SiteAudit/1.0)';
+
     private const BATCH = 5;
+
     private const TIMEOUT = 15;
+
     private const SKIP_EXT = '/\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|docx?|xlsx?|pptx?|zip|rar|7z|gz|mp3|mp4|mov|avi|webm|css|js|json|xml|txt|woff2?|ttf|eot)(\?|$)/i';
 
     private string $host;
+
     private array $pages = [];      // url => dane strony
+
     private array $linkedFrom = []; // url docelowy => [strony źródłowe]
+
     private array $external = [];   // url zewnętrzny => [strony źródłowe]
 
     public function start(Client $client): SiteAudit
@@ -51,6 +57,7 @@ class SiteAuditor
 
     /**
      * Sam audyt (bez zapisu) – używany też w audytach dowolnych stron (potencjalni klienci).
+     *
      * @return array{score:int, pages_crawled:int, issues:array, summary:array, pages:array}
      */
     public function crawl(string $url, ?int $maxPages = null): array
@@ -64,6 +71,11 @@ class SiteAuditor
         $robots = $this->fetchText($root.'robots.txt');
         $robotsBlocksAll = $robots !== null && $this->robotsBlocksAll($robots);
         $sitemapUrls = $this->sitemapUrls($root, $robots);
+
+        // Widoczność w AI: llms.txt i dostęp robotów AI w robots.txt
+        $llms = $this->fetchText($root.'llms.txt');
+        $llmsCheck = $llms !== null ? $this->validateLlmsTxt($llms, $root) : null;
+        $aiBlocked = $robots !== null && ! $robotsBlocksAll ? $this->blockedAiBots($robots) : [];
 
         // HTTPS: czy wersja http:// przekierowuje na https://
         $httpRedirects = null;
@@ -101,6 +113,7 @@ class SiteAuditor
 
         $externalBroken = $this->checkExternal(array_slice(array_keys($this->external), 0, (int) config('adpilot.site_audit.max_external', 40)));
         $issues = $this->issues($root, $robots, $robotsBlocksAll, $sitemapUrls, $httpRedirects, $externalBroken);
+        $issues = $this->sortIssues($issues + $this->aiIssues($llms !== null, $llmsCheck, $aiBlocked));
 
         $html = array_filter($this->pages, fn ($p) => $p['html']);
         $times = array_filter(array_column($html, 'ms'));
@@ -122,6 +135,9 @@ class SiteAuditor
                 'http_redirects' => $httpRedirects,
                 'robots' => $robots !== null,
                 'sitemap_urls' => count($sitemapUrls),
+                'llms_txt' => $llms !== null,
+                'llms_txt_links' => $llmsCheck['links'] ?? 0,
+                'ai_bots_blocked' => array_column($aiBlocked, 'bot'),
                 'external_checked' => min(count($this->external), (int) config('adpilot.site_audit.max_external', 40)),
                 'counts' => collect($issues)->countBy('severity')->all(),
                 'limit_reached' => count($this->pages) >= $max,
@@ -430,8 +446,198 @@ class SiteAuditor
             $add('no_robots', 'low', 'Brak pliku robots.txt', 'Robots.txt informuje roboty, co indeksować, i wskazuje mapę strony.', 'Dodaj robots.txt z linią Sitemap: https://twojadomena/sitemap.xml.', [], 'site');
         }
 
+        return $this->sortIssues($issues);
+    }
+
+    private function sortIssues(array $issues): array
+    {
         $order = ['critical' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
         uasort($issues, fn ($a, $b) => $order[$a['severity']] <=> $order[$b['severity']] ?: $b['count'] <=> $a['count']);
+
+        return $issues;
+    }
+
+    // ------------------------------------------------------------------ widoczność w AI (llms.txt, roboty AI)
+
+    /** Roboty AI: wyszukiwarki/asystenci (ważne dla widoczności) i roboty zbierające dane do trenowania modeli. */
+    public const AI_BOTS = [
+        'OAI-SearchBot' => ['ChatGPT – wyszukiwarka', 'search'],
+        'ChatGPT-User' => ['ChatGPT – otwieranie linków', 'search'],
+        'PerplexityBot' => ['Perplexity', 'search'],
+        'Claude-SearchBot' => ['Claude – wyszukiwarka', 'search'],
+        'Claude-User' => ['Claude – otwieranie linków', 'search'],
+        'GPTBot' => ['OpenAI – trenowanie modeli', 'training'],
+        'ClaudeBot' => ['Anthropic – trenowanie modeli', 'training'],
+        'Google-Extended' => ['Google Gemini – trenowanie', 'training'],
+        'Applebot-Extended' => ['Apple Intelligence – trenowanie', 'training'],
+        'CCBot' => ['Common Crawl (zbiór danych dla AI)', 'training'],
+    ];
+
+    /**
+     * Które roboty AI mają w robots.txt zakaz wejścia na całą stronę.
+     * Grupa robota = linie po „User-agent: Nazwa”; jeśli robot nie ma własnej grupy, obowiązuje grupa „*”.
+     *
+     * @return list<array{bot:string, label:string, kind:string}>
+     */
+    public function blockedAiBots(string $robots): array
+    {
+        $groups = [];
+        $current = null;
+        $lastWasAgent = false;
+        foreach (preg_split('/\R/', $robots) as $line) {
+            $line = trim(preg_replace('/#.*/', '', $line));
+            if (! preg_match('/^([a-z-]+)\s*:\s*(.*)$/i', $line, $m)) {
+                continue;
+            }
+            $field = strtolower($m[1]);
+            $value = trim($m[2]);
+            if ($field === 'user-agent') {
+                if (! $lastWasAgent || $current === null) {
+                    $groups[] = ['agents' => [], 'disallow_root' => false, 'allow_root' => false];
+                    $current = array_key_last($groups);
+                }
+                $groups[$current]['agents'][] = strtolower($value);
+                $lastWasAgent = true;
+
+                continue;
+            }
+            $lastWasAgent = false;
+            if ($current === null) {
+                continue;
+            }
+            if ($field === 'disallow' && in_array($value, ['/', '/*'], true)) {
+                $groups[$current]['disallow_root'] = true;
+            } elseif ($field === 'allow' && in_array($value, ['/', '/*'], true)) {
+                $groups[$current]['allow_root'] = true;
+            }
+        }
+
+        $blockedFor = function (string $agent) use ($groups): ?bool {
+            $matching = array_filter($groups, fn ($g) => in_array($agent, $g['agents'], true));
+            if (! $matching) {
+                return null;
+            }
+            $disallow = (bool) array_filter($matching, fn ($g) => $g['disallow_root']);
+            $allow = (bool) array_filter($matching, fn ($g) => $g['allow_root']);
+
+            return $disallow && ! $allow;
+        };
+
+        $out = [];
+        foreach (self::AI_BOTS as $bot => [$label, $kind]) {
+            if ($blockedFor(strtolower($bot)) ?? $blockedFor('*') ?? false) {
+                $out[] = ['bot' => $bot, 'label' => $label, 'kind' => $kind];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Sprawdza llms.txt wg specyfikacji llmstxt.org: H1 z nazwą w pierwszej linii, opcjonalne podsumowanie „> …”,
+     * sekcje H2 z listami linków „- [nazwa](adres): opis”. Do 15 linków sprawdza, czy działają.
+     *
+     * @return array{problems:list<string>, links:int, broken:array<string,int>}
+     */
+    public function validateLlmsTxt(string $text, string $root): array
+    {
+        $problems = [];
+        $text = preg_replace('/^\xEF\xBB\xBF/', '', $text);
+        $lines = preg_split('/\R/', $text);
+        $content = array_values(array_filter(array_map('trim', $lines), fn ($l) => $l !== ''));
+
+        if (trim($text) === '') {
+            return ['problems' => ['Plik jest pusty.'], 'links' => 0, 'broken' => []];
+        }
+        if (preg_match('/<(html|body|head)\b/i', $text)) {
+            $problems[] = 'Plik zawiera HTML zamiast Markdown – serwer prawdopodobnie zwraca stronę zamiast pliku.';
+        }
+        if (! preg_match('/^#\s+\S/', $content[0] ?? '')) {
+            $problems[] = 'Pierwsza linia musi być nagłówkiem z nazwą strony, np. „# Nazwa firmy”.';
+        }
+        $h1 = count(array_filter($content, fn ($l) => preg_match('/^#\s+\S/', $l)));
+        if ($h1 > 1) {
+            $problems[] = "Plik ma {$h1} nagłówki H1 („# …”) – powinien być dokładnie jeden, sekcje oznacz „## …”.";
+        }
+        if (! array_filter($content, fn ($l) => str_starts_with($l, '>'))) {
+            $problems[] = 'Brak krótkiego opisu pod nazwą (linia zaczynająca się od „> ”) – AI nie wie od razu, czym zajmuje się firma.';
+        }
+        if (! array_filter($content, fn ($l) => preg_match('/^##\s+\S/', $l))) {
+            $problems[] = 'Brak sekcji „## …” (np. „## Oferta”, „## Kontakt”) z listami linków.';
+        }
+
+        preg_match_all('/^\s*[-*]\s*\[([^\]]+)\]\(([^)\s]+)\)/m', $text, $m);
+        $links = array_values(array_unique(array_filter(array_map(fn ($u) => $this->absolute($u, $root), $m[2]))));
+        if (! $links) {
+            $problems[] = 'Brak linków w formacie „- [Nazwa strony](https://adres): opis”.';
+        }
+        if (mb_strlen($text) > 200_000) {
+            $problems[] = 'Plik jest bardzo duży (ponad 200 tys. znaków) – llms.txt ma być krótkim spisem; pełną treść daj w llms-full.txt.';
+        }
+
+        $broken = [];
+        $toCheck = array_slice($links, 0, 15);
+        if ($toCheck) {
+            $responses = Http::pool(function (Pool $pool) use ($toCheck) {
+                foreach ($toCheck as $u) {
+                    $pool->as($u)->withUserAgent(self::UA)->timeout(10)->connectTimeout(6)->withOptions(['allow_redirects' => ['max' => 5]])->get($u);
+                }
+            });
+            foreach ($toCheck as $u) {
+                $r = $responses[$u] ?? null;
+                if ($r instanceof Response && (in_array($r->status(), [404, 410], true) || $r->status() >= 500)) {
+                    $broken[$u] = $r->status();
+                } elseif ($r instanceof Throwable && preg_match('/resolve host|SSL|certificate|refused/i', $r->getMessage())) {
+                    $broken[$u] = 0;
+                }
+            }
+        }
+
+        return ['problems' => $problems, 'links' => count($links), 'broken' => $broken];
+    }
+
+    private function aiIssues(bool $hasLlms, ?array $llms, array $aiBlocked): array
+    {
+        $issues = [];
+        $site = function (string $code, string $severity, string $title, string $description, string $action, ?array $details = null, array $urls = []) use (&$issues) {
+            $issues[$code] = [
+                'code' => $code, 'severity' => $severity, 'title' => $title, 'description' => $description, 'action' => $action,
+                'count' => $urls ? count($urls) : 1, 'urls' => array_slice($urls, 0, 30), 'details' => $details, 'scope' => $urls ? 'pages' : 'site',
+            ];
+        };
+
+        $search = array_values(array_filter($aiBlocked, fn ($b) => $b['kind'] === 'search'));
+        $training = array_values(array_filter($aiBlocked, fn ($b) => $b['kind'] === 'training'));
+        if ($search) {
+            $site('ai_search_blocked', 'high', 'robots.txt blokuje wyszukiwarki AI',
+                'Asystenci AI (ChatGPT, Perplexity, Claude) nie mogą wejść na stronę, więc nie polecą jej w odpowiedziach. Zablokowane: '.implode(', ', array_column($search, 'label')).'.',
+                'Usuń „Disallow: /” dla tych robotów w robots.txt (albo dodaj dla nich „Allow: /”). Blokadę robotów trenujących modele można zostawić – to osobne roboty.',
+                array_column($search, 'label', 'bot'));
+        }
+        if ($training) {
+            $site('ai_training_blocked', 'low', 'robots.txt blokuje roboty trenujące AI',
+                'Te roboty zbierają treści do trenowania modeli: '.implode(', ', array_column($training, 'label')).'. Blokada to często świadoma decyzja, ale model może wtedy słabiej „znać” markę.',
+                'Jeśli klient tego nie chciał – usuń blokadę w robots.txt (wtyczki bezpieczeństwa i CDN, np. Cloudflare, potrafią ją dodać same). Jeśli chciał – zostaw.',
+                array_column($training, 'label', 'bot'));
+        }
+
+        if (! $hasLlms) {
+            $site('no_llms_txt', 'low', 'Brak pliku llms.txt',
+                'llms.txt to krótki spis najważniejszych podstron w Markdown dla asystentów AI (ChatGPT, Claude, Perplexity). To nowy, nieobowiązkowy standard – Google go nie wymaga, ale pomaga AI zrozumieć ofertę.',
+                'Dodaj plik /llms.txt: „# Nazwa firmy”, „> jedno zdanie o firmie”, sekcje „## Oferta”, „## Kontakt” z linkami „- [Usługa](https://…): opis”. W WordPressie generator llms.txt mają m.in. Yoast SEO i Rank Math.');
+        } elseif ($llms) {
+            if ($llms['problems']) {
+                $site('llms_txt_invalid', 'medium', 'Plik llms.txt ma błędy formatu',
+                    'Plik istnieje, ale nie trzyma się formatu llms.txt – asystenci AI mogą go źle odczytać. Znalezione błędy: '
+                        .implode(' ', array_map(fn ($p, $n) => ($n + 1).') '.$p, $llms['problems'], array_keys($llms['problems']))),
+                    'Popraw plik /llms.txt według listy błędów (wzór formatu: llmstxt.org).', $llms['problems']);
+            }
+            if ($llms['broken']) {
+                $site('llms_txt_broken_links', 'medium', 'Niedziałające linki w llms.txt',
+                    'llms.txt wskazuje AI podstrony, które nie istnieją albo zwracają błąd.',
+                    'Popraw lub usuń te linki w /llms.txt.', null, array_keys($llms['broken']));
+            }
+        }
 
         return $issues;
     }

@@ -1,19 +1,21 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\AgencyController;
 use App\Http\Controllers\AuditController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CareController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CredentialController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntegrationController;
-use App\Http\Controllers\RecommendationController;
-use App\Http\Controllers\BillingController;
 use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\RecommendationController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\VaultController;
 use App\Http\Controllers\WebAuditController;
 use App\Http\Controllers\WordPressController;
-use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 
 // Strona główna → logowanie / panel (strona ofertowa agencji jest osobno)
@@ -35,6 +37,17 @@ Route::get('a/{token}/{audit}/pdf', [SiteController::class, 'pdf'])->name('publi
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('tasks', [DashboardController::class, 'tasks'])->name('tasks');
+
+    // Agencje (zleceniodawcy) i strony obsługiwane na ich zlecenie
+    Route::resource('agencies', AgencyController::class);
+    Route::post('agencies/{agency}/archive', [AgencyController::class, 'archive'])->name('agencies.archive');
+    Route::post('agencies/{agency}/attach', [AgencyController::class, 'attach'])->name('agencies.attach');
+    Route::delete('agencies/{agency}/clients/{client}', [AgencyController::class, 'detach'])->name('agencies.detach');
+    Route::middleware('can:admin')->group(function () {
+        Route::get('agencies/{agency}/settlement', [AgencyController::class, 'settlement'])->name('agencies.settlement');
+        Route::get('agencies/{agency}/settlement/pdf', [AgencyController::class, 'settlementPdf'])->name('agencies.settlement.pdf');
+        Route::post('agencies/{agency}/settlement/invoiced', [AgencyController::class, 'settlementInvoiced'])->name('agencies.settlement.invoiced');
+    });
 
     Route::resource('clients', ClientController::class)->except('show');
     Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
@@ -103,6 +116,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Strona: dostępność, SSL, audyt SEO/techniczny
     Route::get('clients/{client}/site', [SiteController::class, 'index'])->name('clients.site');
+    Route::get('clients/{client}/llms-txt', [SiteController::class, 'llmsTxt'])->name('clients.llms-txt');
     Route::post('clients/{client}/site/audit', [SiteController::class, 'runAudit'])->middleware('throttle:10,1')->name('clients.site.audit');
     Route::post('clients/{client}/site/monitor', [SiteController::class, 'updateMonitor'])->name('clients.site.monitor');
     Route::post('clients/{client}/site/check', [SiteController::class, 'checkNow'])->middleware('throttle:10,1')->name('clients.site.check');
@@ -121,8 +135,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Sejf dostępów – tylko administratorzy; podgląd wymaga ponownego podania hasła (ważne 3 h)
     Route::middleware('can:admin')->group(function () {
-        Route::post('vault/unlock', [\App\Http\Controllers\VaultController::class, 'unlock'])->middleware('throttle:20,1')->name('vault.unlock');
-        Route::post('vault/lock', [\App\Http\Controllers\VaultController::class, 'lock'])->name('vault.lock');
+        Route::post('vault/unlock', [VaultController::class, 'unlock'])->middleware('throttle:20,1')->name('vault.unlock');
+        Route::post('vault/lock', [VaultController::class, 'lock'])->name('vault.lock');
         Route::get('clients/{client}/credentials', [CredentialController::class, 'index'])->middleware('password.confirm')->name('clients.credentials');
         Route::post('credentials/{credential}/reveal', [CredentialController::class, 'reveal'])->middleware('vault.unlocked')->name('credentials.reveal');
         Route::post('clients/{client}/credentials', [CredentialController::class, 'store'])->name('credentials.store');

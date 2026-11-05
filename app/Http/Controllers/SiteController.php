@@ -7,9 +7,11 @@ use App\Models\Client;
 use App\Models\Setting;
 use App\Models\SiteAudit;
 use App\Services\Monitoring\UptimeMonitor;
+use App\Services\SiteAudit\LlmsTxtGenerator;
 use App\Services\SiteAudit\SiteAuditor;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -17,6 +19,25 @@ use Inertia\Inertia;
 /** Zakładka „Strona”: dostępność + SSL i audyt SEO/techniczny. */
 class SiteController extends Controller
 {
+    /** Generator llms.txt – szkic z podstron znalezionych w ostatnim audycie strony. */
+    public function llmsTxt(Client $client, LlmsTxtGenerator $generator)
+    {
+        $audit = $client->siteAudits()->where('status', 'done')->latest('id')->first();
+
+        return Inertia::render('clients/llms-txt', [
+            'client' => app(ClientController::class)->clientProps($client),
+            'text' => $audit ? $generator->generate($client, $audit->pages ?? []) : null,
+            'audit' => $audit ? [
+                'id' => $audit->id,
+                'finished_at' => $audit->finished_at,
+                'pages' => count($audit->pages ?? []),
+                'has_llms_txt' => $audit->summary['llms_txt'] ?? null,
+                'issues' => collect($audit->issues ?? [])->whereIn('code', ['no_llms_txt', 'llms_txt_invalid', 'llms_txt_broken_links', 'ai_search_blocked', 'ai_training_blocked'])
+                    ->map(fn ($i) => Arr::only($i, ['code', 'severity', 'title', 'description', 'action']))->values(),
+            ] : null,
+        ]);
+    }
+
     public function index(Client $client)
     {
         $monitor = $client->siteMonitor;
@@ -108,8 +129,8 @@ class SiteController extends Controller
             'audit' => $audit,
             'client' => $audit->client,
             'pdf' => $pdf,
-            'brand' => Setting::brand(),
-            'agency' => Setting::brand()['name'],
+            'brand' => Setting::brandFor($audit->client),
+            'agency' => Setting::brandFor($audit->client)['name'],
             'pdfUrl' => $pdf ? null : route('public.site-audit.pdf', [$audit->client->report_token, $audit]),
             'uptime' => UptimeMonitor::uptimePercent($audit->client_id, 30),
         ];

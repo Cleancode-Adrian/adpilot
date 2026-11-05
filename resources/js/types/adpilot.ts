@@ -12,6 +12,8 @@ export interface Integration {
 
 export interface ClientProps {
     id: number;
+    agency_id: number | null;
+    agency: { id: number; name: string; white_label: boolean } | null;
     name: string;
     website_url: string;
     has_ads: boolean;

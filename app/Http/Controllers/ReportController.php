@@ -7,6 +7,7 @@ use App\Mail\ReportReadyMail;
 use App\Models\Client;
 use App\Models\Report;
 use App\Models\Setting;
+use App\Services\Reports\WorkReportBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -37,7 +38,7 @@ class ReportController extends Controller
     public function storeWork(Request $request, Client $client)
     {
         $period = $request->validate(['month' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/']])['month'];
-        $report = app(\App\Services\Reports\WorkReportBuilder::class)->build($client, $period);
+        $report = app(WorkReportBuilder::class)->build($client, $period);
         $n = count($report->data['items']);
 
         return redirect()->route('reports.show', $report)->with('success', $n
@@ -75,7 +76,7 @@ class ReportController extends Controller
     public function refreshWork(Report $report)
     {
         abort_unless($report->type === 'work', 404);
-        $n = app(\App\Services\Reports\WorkReportBuilder::class)->refresh($report);
+        $n = app(WorkReportBuilder::class)->refresh($report);
 
         return back()->with('success', $n ? "Dodano $n nowych wykonanych zadań." : 'Brak nowych wykonanych zadań w tym miesiącu.');
     }
@@ -172,8 +173,8 @@ class ReportController extends Controller
             'summary' => $report->ai_summary ? Str::markdown($report->ai_summary, ['html_input' => 'strip']) : null,
             'noteHtml' => $report->note ? Str::markdown($report->note, ['html_input' => 'strip', 'allow_unsafe_links' => false]) : null,
             'pdf' => $pdf,
-            'agency' => Setting::brand()['name'],
-            'brand' => Setting::brand(),
+            'agency' => Setting::brandFor($report->client)['name'],
+            'brand' => Setting::brandFor($report->client),
             'pdfUrl' => $pdf ? null : route('public.report.pdf', [$report->client->report_token, $report]),
         ];
     }

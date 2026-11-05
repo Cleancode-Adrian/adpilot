@@ -8,6 +8,7 @@ import {
     BarChart3,
     Building2,
     FileSignature,
+    Handshake,
     ListChecks,
     Palette,
     PlusCircle,
@@ -24,6 +25,7 @@ export function AppSidebar() {
     // 1) Klienci – dane, logowanie, notatki, zadania  2) Reklamy – wyniki i zadania reklamowe
     const clientItems: NavItem[] = [
         { title: 'Wszyscy klienci', url: '/clients', icon: Building2, badge: (wp_alerts ?? 0) + (sites_down ?? 0) },
+        { title: 'Agencje', url: '/agencies', icon: Handshake },
         { title: 'Zadania i opieka', url: '/care', icon: ShieldCheck, badge: care_due },
         { title: 'Audyt dowolnej strony', url: '/audits', icon: ScanSearch },
         ...(admin
