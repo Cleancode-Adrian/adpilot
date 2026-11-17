@@ -1,3 +1,4 @@
+import { AuditReport, type Report } from '@/components/adpilot/audit-report';
 import { Section } from '@/components/adpilot/ui';
 import { CopyButton } from '@/components/adpilot/vault';
 import { Button } from '@/components/ui/button';
@@ -87,16 +88,18 @@ export default function AuditShow({
     areas,
     public_url,
     pdf_url,
+    report,
 }: {
     audit: Audit;
     areas: Record<string, string>;
     public_url: string;
     pdf_url: string;
+    report: Report | null;
 }) {
     const running = audit.status === 'pending' || audit.status === 'running';
     useEffect(() => {
         if (!running) return;
-        const t = setInterval(() => router.reload({ only: ['audit'] }), 4000);
+        const t = setInterval(() => router.reload({ only: ['audit', 'report'] }), 4000);
         return () => clearInterval(t);
     }, [running]);
     const a = audit.areas ?? {};
@@ -172,8 +175,8 @@ export default function AuditShow({
                 {running ? (
                     <Section title="Audyt w toku">
                         <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                            <RefreshCw className="size-4 animate-spin" /> Sprawdzam stronę: SEO (do 30 podstron), pomiar, szybkość, bezpieczeństwo –
-                            zwykle 1–2 minuty.
+                            <RefreshCw className="size-4 animate-spin" /> Sprawdzam stronę: najważniejsze podstrony (treść, kod, telefon/komputer),
+                            SEO (do 30 podstron), pomiar, szybkość, bezpieczeństwo – zwykle 2–4 minuty (z przeglądem treści przez AI).
                         </div>
                     </Section>
                 ) : audit.status === 'failed' ? (
@@ -203,6 +206,12 @@ export default function AuditShow({
                                 );
                             })}
                         </div>
+
+                        {report && <AuditReport report={report} />}
+
+                        <h2 className="text-muted-foreground mt-2 text-sm font-semibold tracking-wide uppercase">
+                            Dane techniczne (pełna lista sprawdzeń)
+                        </h2>
 
                         <Section
                             title="SEO i technika"

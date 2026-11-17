@@ -6,6 +6,7 @@ use App\Jobs\RunWebAuditJob;
 use App\Models\Client;
 use App\Models\Setting;
 use App\Models\WebAudit;
+use App\Services\WebAudit\AuditReportBuilder;
 use App\Services\WebAudit\WebAuditor;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -42,12 +43,23 @@ class WebAuditController extends Controller
         return redirect()->route('audits.show', $audit)->with('success', 'Audyt uruchomiony – zwykle trwa 1–2 minuty.');
     }
 
+    /** Audyty sprzed szczegółowego raportu dostają raport złożony z samych wyników technicznych. */
+    private function report(WebAudit $audit): ?array
+    {
+        if ($audit->status !== 'done') {
+            return null;
+        }
+
+        return $audit->report ?? app(AuditReportBuilder::class)->build($audit, $audit->areas ?? [], null, null);
+    }
+
     public function show(WebAudit $audit)
     {
         $audit->load('client:id,name');
 
         return Inertia::render('audits/show', [
-            'audit' => $audit,
+            'audit' => $audit->makeHidden('report'),
+            'report' => $this->report($audit),
             'areas' => WebAuditor::AREAS,
             'public_url' => route('public.web-audit', $audit->token),
             'pdf_url' => route('public.web-audit.pdf', $audit->token),
@@ -102,6 +114,7 @@ class WebAuditController extends Controller
     private function viewData(WebAudit $audit, bool $pdf): array
     {
         return ['audit' => $audit, 'areas' => WebAuditor::AREAS, 'pdf' => $pdf, 'brand' => Setting::brand(), 'agency' => Setting::brand()['name'],
+            'report' => $this->report($audit),
             'pdfUrl' => $pdf ? null : route('public.web-audit.pdf', $audit->token)];
     }
 }

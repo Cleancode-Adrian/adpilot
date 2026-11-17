@@ -2,6 +2,8 @@
 
 namespace App\Services\Tracking;
 
+use App\Models\Client;
+use App\Services\WebAudit\PageSpeed;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -257,29 +259,10 @@ class TrackingAuditor
         return null;
     }
 
+    /** PageSpeed na telefonie: wynik, LCP/CLS/TBT oraz szczegóły (możliwości poprawy, dostępność) do audytu strony. */
     private function pagespeed(string $url): ?array
     {
-        try {
-            $res = Http::timeout(90)->get('https://www.googleapis.com/pagespeedonline/v5/runPagespeed', array_filter([
-                'url' => $url,
-                'strategy' => 'mobile',
-                'category' => 'performance',
-                'key' => config('adpilot.pagespeed.api_key'),
-            ]));
-            if (! $res->successful()) {
-                return null;
-            }
-            $lh = $res->json('lighthouseResult');
-
-            return [
-                'performance' => (int) round(($lh['categories']['performance']['score'] ?? 0) * 100),
-                'lcp_s' => round(($lh['audits']['largest-contentful-paint']['numericValue'] ?? 0) / 1000, 1),
-                'cls' => round($lh['audits']['cumulative-layout-shift']['numericValue'] ?? 0, 3),
-                'tbt_ms' => (int) ($lh['audits']['total-blocking-time']['numericValue'] ?? 0),
-            ];
-        } catch (Throwable) {
-            return null;
-        }
+        return app(PageSpeed::class)->run($url, 'mobile');
     }
 
     // ---------------------------------------------------------------- checklista
@@ -453,7 +436,9 @@ class TrackingAuditor
                 continue;
             }
             $total += $c['weight'];
-            $earned += match ($c['status']) { 'ok' => $c['weight'], 'warn' => $c['weight'] * 0.4, default => 0 };
+            $earned += match ($c['status']) {
+                'ok' => $c['weight'], 'warn' => $c['weight'] * 0.4, default => 0
+            };
         }
 
         return $total ? (int) round($earned / $total * 100) : 0;
@@ -463,7 +448,7 @@ class TrackingAuditor
 
     private function normalizeUrl(string $url): string
     {
-        return \App\Models\Client::normalizeUrl($url)
+        return Client::normalizeUrl($url)
             ?? throw new \RuntimeException("Nieprawidłowy adres strony: {$url}. Popraw go w ustawieniach klienta (np. https://twojadomena.pl).");
     }
 

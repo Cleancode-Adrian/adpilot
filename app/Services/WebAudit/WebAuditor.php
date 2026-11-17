@@ -24,6 +24,10 @@ class WebAuditor
         private SiteAuditor $seo,
         private TrackingAuditor $tracking,
         private SecurityScanner $security,
+        private PageInspector $inspector,
+        private AiPageReviewer $reviewer,
+        private AuditReportBuilder $builder,
+        private PageSpeed $pagespeedClient,
     ) {}
 
     public function run(WebAudit $audit): void
@@ -55,6 +59,7 @@ class WebAuditor
         $areas['speed'] = [
             'score' => $pagespeed['performance'] ?? ($avgMs ? max(0, min(100, (int) round(100 - ($avgMs - 400) / 30))) : null),
             'pagespeed' => $pagespeed,
+            'desktop' => $pagespeed ? $this->pagespeedClient->run($audit->url, 'desktop') : null,
             'avg_ms' => $avgMs,
             'source' => $pagespeed ? 'pagespeed' : ($avgMs ? 'response' : null),
         ];
@@ -72,6 +77,23 @@ class WebAuditor
 
             return;
         }
-        $audit->update(['status' => 'done', 'areas' => $areas, 'score' => (int) round(array_sum($scores) / count($scores)), 'finished_at' => now()]);
+
+        // Szczegółowa analiza najważniejszych podstron (kod, mobile/desktop) + przegląd treści przez AI
+        $inspection = $ai = $inspectionError = null;
+        try {
+            $inspection = $this->inspector->inspect($audit->url);
+        } catch (Throwable $e) {
+            $inspectionError = mb_substr($e->getMessage(), 0, 300);
+        }
+        if ($inspection) {
+            try {
+                $ai = $this->reviewer->review($inspection, $inspection['findings'], $audit->name);
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+        $report = $this->builder->build($audit, $areas, $inspection, $ai, $inspectionError);
+
+        $audit->update(['status' => 'done', 'areas' => $areas, 'report' => $report, 'score' => (int) round(array_sum($scores) / count($scores)), 'finished_at' => now()]);
     }
 }

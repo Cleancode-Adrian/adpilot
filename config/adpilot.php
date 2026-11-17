@@ -46,6 +46,7 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ADPILOT_AI_MODEL', 'claude-opus-5-5'),
         'effort' => env('ADPILOT_AI_EFFORT', 'medium'),
+        'audit_effort' => env('ADPILOT_AUDIT_AI_EFFORT', 'high'), // przegląd treści w audycie strony – dokładność ważniejsza niż czas
     ],
 
     'pagespeed' => [
