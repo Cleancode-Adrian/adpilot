@@ -318,4 +318,16 @@ class DetailedAuditTest extends TestCase
         auth()->logout();
         $this->get('/audyt/'.$audit->getRawOriginal('token'))->assertOk()->assertSee('Kod i technika');
     }
+
+    public function test_audit_can_be_deleted_from_the_list(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $audit = WebAudit::create(['url' => 'https://gpi-tanks.com/', 'status' => 'done', 'score' => 65, 'token' => 'tajny-token']);
+        $this->get('/audits')->assertOk();
+
+        $this->delete("/audits/{$audit->id}")->assertRedirect('/audits');
+        $this->assertDatabaseMissing('web_audits', ['id' => $audit->id]);
+        auth()->logout();
+        $this->get('/audyt/tajny-token')->assertNotFound(); // link dla klienta przestaje działać
+    }
 }

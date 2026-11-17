@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { RefreshCw, ScanSearch } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { RefreshCw, ScanSearch, Trash2 } from 'lucide-react';
 
 interface Row {
     id: number;
@@ -106,6 +106,9 @@ export default function AuditsIndex({ audits, areas }: { audits: Row[]; areas: R
                                             </th>
                                         ))}
                                         <th className="py-2 font-medium">Kiedy</th>
+                                        <th className="py-2">
+                                            <span className="sr-only">Usuń</span>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -145,6 +148,22 @@ export default function AuditsIndex({ audits, areas }: { audits: Row[]; areas: R
                                                     </td>
                                                 ))}
                                                 <td className="text-muted-foreground py-2 text-xs">{dateTime(a.created_at)}</td>
+                                                <td className="py-2 text-right">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Usuń audyt"
+                                                        aria-label={`Usuń audyt ${a.url}`}
+                                                        className="text-muted-foreground hover:text-[#b42f2f]"
+                                                        onClick={() =>
+                                                            confirm(
+                                                                `Usunąć audyt ${a.url.replace(/^https?:\/\/(www\.)?/, '')}? Link do raportu dla klienta przestanie działać.`,
+                                                            ) && router.delete(`/audits/${a.id}`, { preserveScroll: true })
+                                                        }
+                                                    >
+                                                        <Trash2 className="size-4" />
+                                                    </Button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
