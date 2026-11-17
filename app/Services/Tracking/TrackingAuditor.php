@@ -3,7 +3,9 @@
 namespace App\Services\Tracking;
 
 use App\Models\Client;
+use App\Services\WebAudit\BotWall;
 use App\Services\WebAudit\PageSpeed;
+use App\Services\WebAudit\SiteBlockedException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -70,6 +72,10 @@ class TrackingAuditor
         if ($response->failed()) {
             throw new \RuntimeException("Strona zwróciła błąd HTTP {$response->status()}."
                 .(in_array($response->status(), [403, 429, 503]) ? ' Prawdopodobnie blokuje automatyczne skanowanie (np. Cloudflare) – sprawdź pomiar ręcznie w Tag Assistant.' : ''));
+        }
+
+        if ($wall = BotWall::detectResponse($response)) {
+            throw new SiteBlockedException($wall); // ekran weryfikacji – nie oceniamy pomiaru (byłyby fałszywe braki GA4/piksela)
         }
 
         $html = $response->body();

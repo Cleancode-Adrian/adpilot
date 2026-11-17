@@ -9,6 +9,7 @@ use DOMXPath;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Throwable;
 
 /**
@@ -71,6 +72,9 @@ class PageInspector
         $root = rtrim($url, '/').'/';
 
         $home = $this->fetch([$root])[$root] ?? null;
+        if ($home && ! empty($home['blocked'])) {
+            throw new SiteBlockedException($home['blocked']);
+        }
         if (! $home || ! $home['ok']) {
             throw new \RuntimeException('Nie udało się pobrać strony głównej: '.($home['error'] ?? $root));
         }
@@ -104,7 +108,7 @@ class PageInspector
         $pages = array_replace(array_intersect_key(array_flip(array_keys(self::ROLES)), $pages), $pages);
 
         foreach ($pages as $role => $p) {
-            if (! $p['ok']) {
+            if (! $p['ok'] && empty($p['blocked'])) {
                 $this->add($role, 'page', 'Dostępność', 'pilne', 'Podstrona „'.self::ROLES[$role].'” nie działa',
                     'Link z menu prowadzi pod adres, który zwraca błąd '.($p['status'] ?: 'połączenia').'. Klient, który tam kliknie, nie zobaczy treści.',
                     'Przywróć podstronę albo popraw link w menu.', $p['url'], [$p['url']]);
@@ -146,22 +150,52 @@ class PageInspector
 
     // ------------------------------------------------------------------ pobieranie i wybór podstron
 
-    /** @return array<string, array|null> */
+    /**
+     * Pobiera podstrony. Jeśli serwer pokaże ekran weryfikacji / limit zapytań, czeka i pobiera ponownie (pojedynczo),
+     * a gdy blokada trwa – oznacza podstronę jako zablokowaną (nie jest wtedy oceniana).
+     *
+     * @return array<string, array|null>
+     */
     private function fetch(array $urls): array
     {
         $urls = array_values(array_unique(array_filter($urls)));
         if (! $urls) {
             return [];
         }
-        $responses = Http::pool(function (Pool $pool) use ($urls) {
+        $request = fn ($pending) => $pending->withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8'])
+            ->timeout(20)->connectTimeout(10)->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]]);
+        $responses = Http::pool(function (Pool $pool) use ($urls, $request) {
             foreach ($urls as $u) {
-                $pool->as($u)->withUserAgent(self::UA)->timeout(20)->connectTimeout(10)
-                    ->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])->get($u);
+                $request($pool->as($u))->get($u);
             }
         });
+        foreach ($urls as $u) {
+            $r = $responses[$u] ?? null;
+            if (! $r instanceof Response || ! BotWall::detectResponse($r)) {
+                continue;
+            }
+            foreach ((array) config('adpilot.site_audit.retry_after', []) as $seconds) {
+                Sleep::for((int) $seconds)->seconds();
+                try {
+                    $r = $request(Http::withOptions([]))->get($u);
+                } catch (Throwable) {
+                    continue;
+                }
+                if (! BotWall::detectResponse($r)) {
+                    break;
+                }
+            }
+            $responses[$u] = $r;
+        }
         $out = [];
         foreach ($urls as $u) {
             $r = $responses[$u] ?? null;
+            if ($r instanceof Response && ($wall = BotWall::detectResponse($r))) {
+                $out[$u] = ['url' => $u, 'final_url' => $u, 'status' => $r->status(), 'ok' => false, 'body' => '', 'blocked' => $wall, 'error' => 'Zabezpieczenie: '.$wall,
+                    'headers' => [], 'ttfb_ms' => null];
+
+                continue;
+            }
             if (! $r instanceof Response) {
                 $out[$u] = ['url' => $u, 'final_url' => $u, 'status' => 0, 'ok' => false, 'body' => '', 'error' => $r instanceof Throwable ? mb_substr($r->getMessage(), 0, 200) : 'Brak odpowiedzi'];
 
@@ -229,7 +263,7 @@ class PageInspector
 
     private function snapshot(string $role, array $res): array
     {
-        $base = ['role' => $role, 'label' => self::ROLES[$role], 'url' => $res['url'], 'final_url' => $res['final_url'], 'status' => $res['status'], 'ok' => $res['ok']];
+        $base = ['role' => $role, 'label' => self::ROLES[$role], 'url' => $res['url'], 'final_url' => $res['final_url'], 'status' => $res['status'], 'ok' => $res['ok'], 'blocked' => $res['blocked'] ?? null];
         if (! $res['ok']) {
             return $base + ['title' => null, 'links' => [], 'emails' => [], 'raw' => ''];
         }

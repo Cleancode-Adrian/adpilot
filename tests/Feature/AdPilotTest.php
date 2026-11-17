@@ -218,7 +218,7 @@ class AdPilotTest extends TestCase
         $this->withHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0) Chrome/130.0')->get('/login')
             ->assertOk()
             ->assertHeader('X-Robots-Tag', \App\Http\Middleware\BlockCrawlers::ROBOTS_HEADER)
-            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('Referrer-Policy', 'same-origin')
             ->assertSee('noindex', false);
 
         $client = $this->demo();

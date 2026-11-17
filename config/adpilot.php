@@ -71,5 +71,10 @@ return [
         'max_pages' => (int) env('SITE_AUDIT_MAX_PAGES', 60),
         'max_external' => (int) env('SITE_AUDIT_MAX_EXTERNAL', 40),
         'prospect_pages' => (int) env('SITE_AUDIT_PROSPECT_PAGES', 30), // audyt dowolnej strony (potencjalni klienci)
+        // Ile podstron naraz i przerwa między paczkami – łagodniej dla hostingów z limitem zapytań (inaczej pokazują ekran „weryfikacji”)
+        'concurrency' => (int) env('SITE_AUDIT_CONCURRENCY', 3),
+        'delay_ms' => (int) env('SITE_AUDIT_DELAY_MS', 400),
+        // Przerwy (s) przed ponownym pobraniem, gdy serwer pokaże ekran weryfikacji / limit zapytań zamiast strony
+        'retry_after' => [8, 20],
     ],
 ];

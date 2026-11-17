@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
-        <meta name="referrer" content="no-referrer">
+        <meta name="referrer" content="same-origin">
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 

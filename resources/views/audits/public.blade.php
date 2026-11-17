@@ -210,8 +210,14 @@
     <p style="margin: 6px 0 4px">Dodatkowo cała strona przeszła sprawdzenie techniczne: do {{ $a['seo']['pages'] ?? config('adpilot.site_audit.prospect_pages') }} podstron pod kątem błędów i SEO technicznego, pomiar i zgody RODO oraz bezpieczeństwo.</p>
     <p class="note">Ograniczenie: audyt czyta kod strony, a nie jej wygląd na ekranie (style, animacje, rozwijane menu). Uwagi o różnicach telefon/komputer wynikają z budowy kodu – takie punkty są oznaczone „do potwierdzenia”, a na końcu dokumentu jest checklista do szybkiego sprawdzenia.@if($r['verify_count']) Punktów do potwierdzenia: {{ $r['verify_count'] }}.@endif</p>
     <p class="note">Oznaczenia: <span style="color: #c0392b; font-weight: bold">PILNE</span> – traci klientów lub pieniądze, wprowadza w błąd albo niesie ryzyko prawne; <span style="color: #d4880f; font-weight: bold">ŚREDNIE</span> – wyraźnie utrudnia decyzję lub kontakt; <span style="color: #3a6ea5; font-weight: bold">DROBNE</span> – kosmetyka i porządki.</p>
-    @if($r['inspection_error'])
-        <p class="note">Szczegółowej analizy podstron nie udało się wykonać (strona zablokowała automatyczne pobieranie) – raport zawiera wyniki sprawdzenia technicznego.</p>
+    @if(! empty($r['blocked']))
+        <div class="box">
+            <strong style="color: {{ $navy }}">Uwaga o zabezpieczeniu serwera.</strong>
+            W trakcie audytu serwer strony zaczął pokazywać naszemu narzędziu ekran weryfikacji ({{ $r['blocked'] }}) zamiast treści – to ochrona hostingu przed automatami i nadmiarem zapytań.
+            Klienci w zwykłej przeglądarce widzą stronę normalnie, więc nie traktujemy tego jako błędu. Elementów, których nie dało się pobrać, nie oceniamy{{ $r['pages'] ? '' : ' – dotyczy to szczegółowej analizy podstron' }}.
+        </div>
+    @elseif($r['inspection_error'])
+        <p class="note">Szczegółowej analizy podstron nie udało się wykonać – raport zawiera wyniki sprawdzenia technicznego.</p>
     @endif
 
     {{-- ============ Sekcje ============ --}}

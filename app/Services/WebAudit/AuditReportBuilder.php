@@ -24,7 +24,7 @@ class AuditReportBuilder
         'about' => 'Informacje o firmie i zespole',
     ];
 
-    public function build(WebAudit $audit, array $areas, ?array $inspection, ?array $ai, ?string $inspectionError = null): array
+    public function build(WebAudit $audit, array $areas, ?array $inspection, ?array $ai, ?string $inspectionError = null, ?string $blocked = null): array
     {
         $findings = array_merge($inspection['findings'] ?? [], $ai['findings'] ?? [], $this->fromAreas($areas, $inspection));
         $pages = $inspection['pages'] ?? [];
@@ -90,6 +90,7 @@ class AuditReportBuilder
                 'totals' => $inspection['performance']['totals'] ?? null,
             ],
             'inspection_error' => $inspectionError,
+            'blocked' => $blocked, // zabezpieczenie serwera, które w trakcie audytu pokazało ekran weryfikacji
             'sections' => array_values(array_filter($sections, fn ($s) => $s['groups'] || isset($pages[$s['key']]))),
             'plan' => [
                 'now' => $this->planItems($all, 'pilne'),

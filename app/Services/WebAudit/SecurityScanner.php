@@ -24,6 +24,9 @@ class SecurityScanner
 
         $url = parse_url($url, PHP_URL_PATH) ? $url : rtrim($url, '/').'/'; // adres domeny zawsze z końcowym /
         $res = Http::withUserAgent(self::UA)->timeout(20)->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])->get($url);
+        if ($wall = BotWall::detectResponse($res)) {
+            throw new SiteBlockedException($wall); // nagłówki ekranu weryfikacji to nie nagłówki strony
+        }
         $history = (array) ($res->headers()['X-Guzzle-Redirect-History'] ?? []);
         $final = $history ? end($history) : $url;
         $h = fn (string $name) => trim((string) $res->header($name));
@@ -125,7 +128,9 @@ class SecurityScanner
         $total = $earned = 0;
         foreach ($checks as $c) {
             $total += $c['weight'];
-            $earned += match ($c['status']) { 'ok' => $c['weight'], 'warn' => $c['weight'] * 0.4, default => 0 };
+            $earned += match ($c['status']) {
+                'ok' => $c['weight'], 'warn' => $c['weight'] * 0.4, default => 0
+            };
         }
 
         return $total ? (int) round($earned / $total * 100) : 0;

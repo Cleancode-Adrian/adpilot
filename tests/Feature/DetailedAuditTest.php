@@ -6,11 +6,13 @@ use App\Models\User;
 use App\Models\WebAudit;
 use App\Services\WebAudit\AiPageReviewer;
 use App\Services\WebAudit\AuditReportBuilder;
+use App\Services\WebAudit\BotWall;
 use App\Services\WebAudit\PageInspector;
 use App\Services\WebAudit\PageSpeed;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
 /** Szczegółowa analiza strony: wybór podstron, błędy w kodzie, mobile/desktop, przegląd treści AI, raport. */
@@ -254,6 +256,48 @@ class DetailedAuditTest extends TestCase
         $this->assertSame('srednie', $all->firstWhere('title', 'Kolory tła i pierwszego planu mają niewystarczający współczynnik kontrastu')['sev']);
         $this->assertNotNull($all->first(fn ($f) => str_starts_with($f['title'], 'Treść „skacze”')));
         $this->assertSame(74, $report['performance']['desktop']['performance']);
+    }
+
+    /** Hosting z limitem zapytań: po kilku pobraniach pokazuje ekran weryfikacji – nie wolno go oceniać jak treści. */
+    public function test_verification_screen_is_not_reported_as_site_content(): void
+    {
+        Sleep::fake();
+        $wall = '<!doctype html><html><head><title>One moment, please...</title></head><body><h1>Please wait while your request is being verified...</h1><script>/* challenge */</script></body></html>';
+        $this->assertSame('zabezpieczenie hostingu', BotWall::detect($wall));
+        $this->assertNull(BotWall::detect('<html><title>Firma</title><body>'.str_repeat('Treść strony. ', 4000).'One moment, please...</body></html>'), 'duża zwykła strona to treść');
+
+        // Zabezpieczenie: 'all' – blokuje od pierwszego zapytania, liczba – blokuje szkołę po tylu zapytaniach
+        $block = 'all';
+        $count = 0;
+        Http::fake(function (Request $r) use (&$block, &$count, $wall) {
+            $blocked = $block === 'all' || (str_contains($r->url(), 'szkola.example') && ++$count > $block);
+
+            return $blocked ? Http::response($wall, 200, ['Content-Type' => 'text/html']) : null; // null = dalej obsługuje fałszywa strona szkoły
+        });
+        $this->fakeSchoolSite();
+
+        // a) blokada od pierwszego zapytania – audyt kończy się czytelnym komunikatem, bez fałszywych uwag
+        config(['adpilot.pagespeed.enabled' => false]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/audits', ['url' => 'blokada.example']);
+        $audit = WebAudit::first();
+        $this->assertSame('failed', $audit->status);
+        $this->assertStringContainsString('ekran weryfikacji (zabezpieczenie hostingu)', $audit->error);
+        $this->assertNull($audit->report);
+        $this->assertSame('zabezpieczenie hostingu', $audit->areas['tracking']['blocked'], 'brak „braku GA4” – pomiar nieoceniony');
+        Sleep::assertSlept(fn ($d) => $d->totalSeconds >= 8, 3); // podstrony: 8 s i 20 s, przejście po stronie: 8 s
+
+        // b) blokada po kilku zapytaniach – podstrony sprawdzone, przejście po stronie przerwane, raport z adnotacją
+        $block = 25;
+        $this->post('/audits', ['url' => 'szkola.example', 'name' => 'Szkoła']);
+        $audit = WebAudit::latest('id')->first();
+        $this->assertSame('done', $audit->status, (string) $audit->error);
+        $this->assertSame('zabezpieczenie hostingu', $audit->report['blocked']);
+        $this->assertSame(['home', 'offer', 'detail', 'contact'], array_column($audit->report['pages'], 'role'));
+        $titles = collect($audit->report['sections'])->flatMap(fn ($s) => collect($s['groups'])->flatMap(fn ($g) => $g['findings']))->pluck('title');
+        $this->assertFalse($titles->contains(fn ($t) => preg_match('/ekran weryfik|one moment|being verified|zabezpieczeni/iu', $t)), 'ekran weryfikacji nie jest uwagą');
+        auth()->logout();
+        $this->get('/audyt/'.$audit->getRawOriginal('token'))->assertOk()->assertSee('Uwaga o zabezpieczeniu serwera');
     }
 
     public function test_report_without_ai_has_template_proposals_and_old_audits_still_render(): void

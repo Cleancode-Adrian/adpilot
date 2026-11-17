@@ -12,7 +12,6 @@ import {
     Inbox,
     ListChecks,
     Palette,
-    PiggyBank,
     ScanSearch,
     ShieldCheck,
     Sun,
@@ -36,12 +35,7 @@ export function AppSidebar() {
         { title: 'Audyt strony', url: '/audits', icon: ScanSearch },
         ...(admin ? [{ title: 'Oferty', url: '/quotes', icon: FileSignature }] : []),
     ];
-    const finance: NavItem[] = admin
-        ? [
-              { title: 'Rozliczenia', url: '/billing', icon: Wallet },
-              { title: 'Rentowność', url: '/profitability', icon: PiggyBank },
-          ]
-        : [];
+    const finance: NavItem[] = admin ? [{ title: 'Rozliczenia', url: '/billing', icon: Wallet }] : [];
     const ads: NavItem[] = [
         { title: 'Wyniki reklam', url: '/dashboard', icon: BarChart3 },
         { title: 'Zadania reklamowe', url: '/tasks', icon: ListChecks },

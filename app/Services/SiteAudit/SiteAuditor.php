@@ -4,11 +4,14 @@ namespace App\Services\SiteAudit;
 
 use App\Models\Client;
 use App\Models\SiteAudit;
+use App\Services\WebAudit\BotWall;
+use App\Services\WebAudit\SiteBlockedException;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Throwable;
 
 /**
@@ -91,9 +94,35 @@ class SiteAuditor
         // Przechodzenie po stronie: strona główna + linki + adresy z mapy strony
         $queue = array_values(array_unique(array_merge([$root], array_slice($sitemapUrls, 0, $max))));
         $seen = array_fill_keys($queue, true);
+        $batchSize = max(1, (int) config('adpilot.site_audit.concurrency', self::BATCH));
+        $delayMs = (int) config('adpilot.site_audit.delay_ms', 0);
+        $blockedBy = null;
+        $blockedCount = 0;
+        $retried = false;
         while ($queue && count($this->pages) < $max) {
-            $batch = array_splice($queue, 0, min(self::BATCH, $max - count($this->pages)));
-            foreach ($this->fetchPages($batch) as $url => $page) {
+            $batch = array_splice($queue, 0, min($batchSize, $max - count($this->pages)));
+            $fetched = $this->fetchPages($batch);
+
+            // Ekran weryfikacji / limit zapytań: jedna przerwa i ponowienie; jeśli dalej blokuje – kończymy przechodzenie,
+            // a zablokowanych adresów nie oceniamy (to nie są błędy strony).
+            $walled = array_keys(array_filter($fetched, fn ($p) => ! empty($p['blocked'])));
+            if ($walled && ! $retried && ($wait = (array) config('adpilot.site_audit.retry_after', []))) {
+                $retried = true;
+                Sleep::for((int) $wait[0])->seconds();
+                $fetched = array_replace($fetched, $this->fetchPages($walled));
+                $walled = array_keys(array_filter($fetched, fn ($p) => ! empty($p['blocked'])));
+            }
+            if ($walled) {
+                $blockedBy = $fetched[$walled[0]]['blocked'];
+                $blockedCount += count($walled) + count($queue);
+                if (isset($fetched[$root]['blocked'])) {
+                    throw new SiteBlockedException($blockedBy);
+                }
+                $fetched = array_diff_key($fetched, array_flip($walled));
+                $queue = [];
+            }
+
+            foreach ($fetched as $url => $page) {
                 $this->pages[$url] = $page;
                 foreach ($page['links_internal'] ?? [] as $link) {
                     $this->linkedFrom[$link][] = $url;
@@ -105,6 +134,9 @@ class SiteAuditor
                 foreach ($page['links_external'] ?? [] as $link) {
                     $this->external[$link][] = $url;
                 }
+            }
+            if ($queue && $delayMs > 0) {
+                Sleep::for($delayMs)->milliseconds();
             }
         }
         if (! $this->pages || ($this->pages[$root]['status'] ?? 0) === 0) {
@@ -141,6 +173,8 @@ class SiteAuditor
                 'external_checked' => min(count($this->external), (int) config('adpilot.site_audit.max_external', 40)),
                 'counts' => collect($issues)->countBy('severity')->all(),
                 'limit_reached' => count($this->pages) >= $max,
+                'blocked' => $blockedBy,          // np. „Cloudflare” – serwer zaczął pokazywać ekran weryfikacji
+                'blocked_pages' => $blockedCount, // ile adresów pominięto przez blokadę
             ],
             'pages' => array_values(array_map(fn ($p) => array_intersect_key($p, array_flip(
                 ['url', 'status', 'ms', 'bytes', 'title', 'description', 'h1', 'noindex', 'words', 'redirects', 'error']
@@ -168,6 +202,11 @@ class SiteAuditor
             $ms = (int) round((microtime(true) - $started[$url]) * 1000);
             if (! $res instanceof Response) {
                 $out[$url] = ['url' => $url, 'status' => 0, 'ms' => null, 'html' => false, 'error' => $res instanceof Throwable ? mb_substr($res->getMessage(), 0, 200) : 'Brak odpowiedzi'];
+
+                continue;
+            }
+            if ($wall = BotWall::detectResponse($res)) {
+                $out[$url] = ['url' => $url, 'status' => $res->status(), 'ms' => $ms, 'html' => false, 'blocked' => $wall, 'error' => 'Zabezpieczenie: '.$wall];
 
                 continue;
             }

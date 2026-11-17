@@ -37,8 +37,9 @@ class BlockCrawlers
 
         $response = $next($request);
         $response->headers->set('X-Robots-Tag', self::ROBOTS_HEADER);
-        // linki do raportów zawierają tajny token – nie przekazujemy adresu innym stronom
-        $response->headers->set('Referrer-Policy', 'no-referrer');
+        // Adres strony tylko w obrębie panelu (back() po zapisie wraca na tę samą stronę);
+        // innym stronom nie przekazujemy nic – linki do raportów zawierają tajny token
+        $response->headers->set('Referrer-Policy', 'same-origin');
 
         return $response;
     }

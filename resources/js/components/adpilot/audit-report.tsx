@@ -50,6 +50,7 @@ export interface Report {
         totals: { images_checked: number; images_kb: number; saving_kb: number } | null;
     };
     inspection_error: string | null;
+    blocked?: string | null;
     sections: {
         key: string;
         num: number;
@@ -226,7 +227,14 @@ export function AuditReport({ report }: { report: Report }) {
                         ))}
                     </div>
                 )}
-                {report.inspection_error && (
+                {report.blocked && (
+                    <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                        Serwer strony pokazał skanerowi ekran weryfikacji ({report.blocked}) zamiast treści – to zabezpieczenie hostingu, nie błąd
+                        strony. Zablokowanych elementów nie oceniono. Spróbuj „Ponów” za kilkanaście minut albo poproś o dodanie IP serwera AdPilot do
+                        wyjątków zabezpieczenia.
+                    </p>
+                )}
+                {!report.blocked && report.inspection_error && (
                     <p className="mt-2 text-xs text-[#b42f2f]">Analiza podstron nie powiodła się: {report.inspection_error}</p>
                 )}
             </Section>

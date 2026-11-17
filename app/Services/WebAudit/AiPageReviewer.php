@@ -40,6 +40,8 @@ class AiPageReviewer
     - Opieraj się WYŁĄCZNIE na dostarczonym materiale. Każda uwaga musi mieć dosłowny cytat z materiału w polu evidence (lub pusty, gdy uwaga dotyczy braku czegoś).
       Nie zgaduj wyglądu strony – nie widzisz CSS. Jeśli coś wymaga sprawdzenia w przeglądarce lub u klienta, ustaw verify = true.
     - Nie powtarzaj uwag z listy automatu. Nie zgłaszaj rzeczy oczywistych ani gustu.
+    - Jeśli tekst podstrony wygląda na ekran zabezpieczenia, weryfikacji, captchy, logowania albo błędu serwera („One moment, please”, „Checking your browser”,
+      „Access denied”), to NIE jest treść strony – pomiń tę podstronę i nie zgłaszaj tego jako problemu (klienci w przeglądarce widzą zwykłą stronę).
     - Ważność: „pilne” = realnie traci klientów lub pieniądze, wprowadza w błąd albo podważa wiarygodność firmy (np. zły link do oferty z inną ceną,
       błąd fachowy w nazwie usługi, dwie nazwy firmy); „srednie” = wyraźnie utrudnia decyzję lub kontakt; „drobne” = literówki i kosmetyka.
     - Tytuł: krótki, konkretny (np. „Mylący link w ofercie fizyki”). Opis: 1–3 zdania – co jest nie tak i jak to odbiera klient. fix: co konkretnie zrobić.
