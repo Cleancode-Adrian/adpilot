@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\SiteMonitor;
 use App\Models\WpEvent;
 use App\Services\SystemStatus;
+use Closure;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -29,6 +30,22 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * Laravel zapamiętuje „poprzedni adres” (cel back()) tylko przy zwykłym wczytaniu strony, a przejścia w panelu idą przez
+     * Inertia (XHR). Bez tego zapis na /tasks wracał na ostatnią stronę wczytaną „na twardo”, np. /audits/4.
+     */
+    public function handle(Request $request, Closure $next)
+    {
+        $response = parent::handle($request, $next);
+
+        if ($request->isMethod('GET') && $request->header('X-Inertia') && ! $request->header('X-Inertia-Partial-Component')
+            && $request->hasSession() && $response->getStatusCode() === 200) {
+            $request->session()->setPreviousUrl($request->fullUrl());
+        }
+
+        return $response;
     }
 
     /**

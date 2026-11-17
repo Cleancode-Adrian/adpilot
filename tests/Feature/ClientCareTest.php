@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Mail\ReportReadyMail;
 use App\Models\CareTask;
 use App\Models\CareTemplate;
@@ -233,6 +234,27 @@ class ClientCareTest extends TestCase
         $this->post("/clients/{$client->id}/care/tasks", ['title' => 'Poprawić stopkę', 'due_date' => now()->toDateString()]);
         $this->get('/clients')->assertInertia(fn ($p) => $p->where('clients.0.has_general', true)->where('clients.0.care.total', 1));
         $this->get("/clients/{$client->id}")->assertInertia(fn ($p) => $p->where('client.has_general', true)->has('upcoming', 1));
+    }
+
+    public function test_ticking_task_returns_to_page_opened_via_inertia(): void
+    {
+        $this->actingAs($this->admin());
+        $client = $this->client();
+        $this->post("/clients/{$client->id}/care/tasks", ['title' => 'Baner', 'due_date' => now()->toDateString()]);
+        $task = $client->careTasks()->first();
+
+        $this->get('/care')->assertOk(); // ostatnia strona wczytana „na twardo”
+        $version = (string) app(HandleInertiaRequests::class)->version(request());
+        $inertia = ['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest', 'X-Inertia-Version' => $version];
+        $this->withHeaders($inertia)->get('/tasks')->assertOk();
+        // odświeżenie części danych (np. polling) nie zmienia celu powrotu
+        $this->withHeaders($inertia + ['X-Inertia-Partial-Component' => 'audits/show', 'X-Inertia-Partial-Data' => 'audit'])->get('/care');
+
+        // przeglądarka bez nagłówka Referer (np. stara polityka no-referrer) – i tak wracamy na /tasks
+        $this->withHeaders(['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest', 'X-Inertia-Version' => $version])
+            ->patch("/care/tasks/{$task->id}", ['status' => 'done'])
+            ->assertRedirect('/tasks');
+        $this->assertSame('done', $task->fresh()->status);
     }
 
     public function test_task_due_date_can_be_changed(): void
