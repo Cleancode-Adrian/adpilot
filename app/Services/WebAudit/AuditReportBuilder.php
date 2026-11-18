@@ -37,6 +37,10 @@ class AuditReportBuilder
         }
         $sections[] = ['key' => 'site', 'title' => 'Cała strona: spójność i wiarygodność', 'subtitle' => 'Rzeczy, które dotyczą wszystkich podstron', 'url' => null,
             'findings' => array_values(array_filter($findings, fn ($f) => $f['section'] === 'page' && ($f['page'] === 'site' || ! isset($pages[$f['page']]))))];
+        $legal = $inspection['legal'] ?? null;
+        $sections[] = ['key' => 'legal', 'title' => 'Zgodność z prawem: cookies, RODO'.(! empty($legal['shop']) ? ', sklep' : ''),
+            'subtitle' => 'Zgody na śledzenie, dokumenty i obowiązki informacyjne'.(! empty($legal['shop']) ? ' sklepu (zwroty, Omnibus)' : '').' – ocena na podstawie kodu i treści strony, nie zastępuje porady prawnej', 'url' => null,
+            'findings' => array_values(array_filter($findings, fn ($f) => $f['section'] === 'legal'))];
         $sections[] = ['key' => 'code', 'title' => 'Kod i technika', 'subtitle' => 'Rzeczy widoczne w kodzie, a nie na ekranie: pomiar, zgody, bezpieczeństwo, szybkość, SEO techniczne', 'url' => null,
             'findings' => array_values(array_filter($findings, fn ($f) => $f['section'] === 'code'))];
         $sections[] = ['key' => 'perf', 'title' => 'Wydajność i szybkość', 'subtitle' => 'Google PageSpeed na telefonie i komputerze, obrazy, skrypty i czcionki, serwer i pamięć podręczna', 'url' => null,
@@ -45,6 +49,7 @@ class AuditReportBuilder
             'findings' => array_values(array_filter($findings, fn ($f) => $f['section'] === 'mobile'))];
 
         $order = [
+            'legal' => LegalInspector::GROUPS,
             'code' => ['Pomiar i zgody (RODO)', 'Bezpieczeństwo', 'Kod strony', 'Język i teksty w kodzie', 'Dostępność', 'SEO techniczne'],
             'perf' => ['Wyniki Google PageSpeed', 'Możliwości przyspieszenia (Google PageSpeed)', 'Obrazy do optymalizacji', 'Serwer i pamięć podręczna', 'Skrypty, style i czcionki'],
         ];
@@ -91,7 +96,8 @@ class AuditReportBuilder
             ],
             'inspection_error' => $inspectionError,
             'blocked' => $blocked, // zabezpieczenie serwera, które w trakcie audytu pokazało ekran weryfikacji
-            'sections' => array_values(array_filter($sections, fn ($s) => $s['groups'] || isset($pages[$s['key']]))),
+            'legal' => $legal,
+            'sections' => array_values(array_filter($sections, fn ($s) => $s['groups'] || isset($pages[$s['key']]) || ($s['key'] === 'legal' && $legal))),
             'plan' => [
                 'now' => $this->planItems($all, 'pilne'),
                 'month' => $this->planItems($all, 'srednie'),
@@ -118,7 +124,8 @@ class AuditReportBuilder
 
         // Pomiar i zgody
         foreach ($areas['tracking']['checks'] ?? [] as $c) {
-            if (! in_array($c['status'], ['fail', 'warn'], true) || in_array($c['group'], ['Strona i SEO', 'Szybkość'], true) || in_array($c['key'], ['https', 'tel_links'], true)) {
+            if (! in_array($c['status'], ['fail', 'warn'], true) || in_array($c['group'], ['Strona i SEO', 'Szybkość'], true) || in_array($c['key'], ['https', 'tel_links'], true)
+                || ($c['key'] === 'cmp' && ! empty($inspection['legal']))) { // baner i zgody ocenia dokładniej sekcja „Zgodność z prawem”
                 continue;
             }
             $sev = $c['status'] === 'fail'
@@ -276,7 +283,11 @@ class AuditReportBuilder
             'id' => $f['id'],
             'title' => $f['title'],
             'where' => $f['section_title'],
-            'who' => in_array($f['section'], ['code', 'perf', 'mobile'], true) ? 'technika' : 'treść',
+            'who' => match (true) {
+                $f['section'] === 'legal' => $f['group'] === LegalInspector::GROUPS[0] ? 'technika' : 'dokumenty',
+                in_array($f['section'], ['code', 'perf', 'mobile'], true) => 'technika',
+                default => 'treść',
+            },
             'verify' => $f['verify'],
         ], $items);
     }
@@ -349,8 +360,19 @@ class AuditReportBuilder
     {
         $items = array_values($ai['checklist'] ?? []);
         foreach ($all as $f) {
-            if ($f['verify'] && in_array($f['section'], ['mobile', 'code', 'perf'], true)) {
+            if ($f['verify'] && in_array($f['section'], ['mobile', 'code', 'perf', 'legal'], true)) {
                 $items[] = 'Do potwierdzenia ('.$f['id'].'): '.rtrim($f['title'], '.').'?';
+            }
+        }
+        $legal = $inspection['legal'] ?? null;
+        if ($legal && $legal['tools']) {
+            $items[] = 'Czy w trybie incognito, zanim klikniesz cokolwiek w banerze, NIE wysyłają się zapytania do google-analytics.com, googletagmanager.com/collect, facebook.com/tr (Tag Assistant lub narzędzia przeglądarki → Sieć)?';
+        }
+        if (! empty($legal['shop'])) {
+            $items[] = 'Czy przycisk składania zamówienia ma napis „Zamawiam z obowiązkiem zapłaty” (lub równie jednoznaczny) i czy przed nim są linki do regulaminu i polityki prywatności?';
+            $items[] = 'Czy e-mail potwierdzający zamówienie zawiera regulamin i wzór formularza odstąpienia od umowy (trwały nośnik)?';
+            if (($legal['promo']['found'] ?? false) === false) {
+                $items[] = 'Czy przy produktach w promocji widać „Najniższa cena z 30 dni przed obniżką” (na sprawdzonych stronach nie było promocji)?';
             }
         }
         $defaults = [
@@ -387,7 +409,7 @@ class AuditReportBuilder
         $top = array_values(array_filter($all, fn ($f) => $f['sev'] === 'pilne'));
         $pl = fn (int $n, string $one, string $few, string $many) => $n.' '.($n === 1 ? $one : (in_array($n % 10, [2, 3, 4], true) && ! in_array($n % 100, [12, 13, 14], true) ? $few : $many));
 
-        return 'Sprawdziliśmy '.($pages ? $pl($pages, 'podstronę', 'podstrony', 'podstron') : 'najważniejsze podstrony').' oraz kod, pomiar, bezpieczeństwo i szybkość strony. '
+        return 'Sprawdziliśmy '.($pages ? $pl($pages, 'podstronę', 'podstrony', 'podstron') : 'najważniejsze podstrony').' oraz kod, pomiar, zgodność z prawem (cookies, RODO), bezpieczeństwo i szybkość strony. '
             .'Znaleźliśmy '.$pl($counts['pilne'], 'pilną sprawę', 'pilne sprawy', 'pilnych spraw').', '.$pl($counts['srednie'], 'średnią', 'średnie', 'średnich')
             .' i '.$pl($counts['drobne'], 'drobną uwagę', 'drobne uwagi', 'drobnych uwag').'.'
             .($top ? ' Najpierw warto zająć się punktem: '.mb_strtolower(mb_substr($top[0]['title'], 0, 1)).mb_substr($top[0]['title'], 1).'.' : '');

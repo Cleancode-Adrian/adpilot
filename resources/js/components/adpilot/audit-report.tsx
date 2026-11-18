@@ -6,7 +6,7 @@ export type Sev = 'pilne' | 'srednie' | 'drobne';
 export interface Finding {
     id: string;
     page: string;
-    section: 'page' | 'code' | 'mobile';
+    section: 'page' | 'code' | 'mobile' | 'perf' | 'legal';
     group: string;
     sev: Sev;
     title: string;
@@ -49,6 +49,7 @@ export interface Report {
         }[];
         totals: { images_checked: number; images_kb: number; saving_kb: number } | null;
     };
+    legal?: Legal | null;
     inspection_error: string | null;
     blocked?: string | null;
     sections: {
@@ -86,6 +87,95 @@ interface PsSummary {
     cls: number;
     ttfb_ms: number | null;
     total_kb: number | null;
+}
+
+interface Legal {
+    shop: boolean;
+    platform: string | null;
+    banner: 'cmp' | 'own' | 'info' | null;
+    cmp: string[];
+    cmp_auto: boolean;
+    consent_mode: boolean;
+    tools: { name: string; ids: string[]; source: string; load: string; ok: boolean | null }[];
+    documents: { key: string; label: string; url: string | null; status: string; http: number | null; required: boolean }[];
+    promo: { checked: number; found: boolean; lowest: boolean | null; url: string | null } | null;
+}
+
+const okCls = (ok: boolean | null) =>
+    ok === true ? 'text-[#0a7d0a] dark:text-[#4ccc4c]' : ok === false ? 'text-[#c0392b] dark:text-[#f08080]' : 'text-[#a86a00] dark:text-[#fab219]';
+
+const DOC_STATUS: Record<string, [string, boolean | null]> = {
+    ok: ['jest', true],
+    link: ['jest link', true],
+    in_text: ['opisane w regulaminie / polityce', true],
+    broken: ['link nie działa', false],
+    missing: ['nie znaleziono', false],
+    unknown: ['nie udało się sprawdzić', null],
+};
+
+function LegalSummary({ legal }: { legal: Legal }) {
+    const banner =
+        legal.banner === 'cmp'
+            ? `baner zgód: ${legal.cmp.join(', ')}${legal.cmp_auto ? ' (automatyczne blokowanie skryptów)' : ''}`
+            : legal.banner === 'own'
+              ? 'własny baner cookies (nie rozpoznano platformy)'
+              : legal.banner === 'info'
+                ? 'tylko komunikat „strona używa cookies” – bez możliwości odmowy'
+                : 'nie znaleziono banera cookies';
+    return (
+        <div className="grid gap-3 text-sm md:grid-cols-2">
+            <div>
+                <div className="text-muted-foreground text-xs">Narzędzia śledzące i zgody · {banner}</div>
+                {legal.tools.length === 0 ? (
+                    <p className="text-muted-foreground mt-1">Nie wykryto Google Analytics, Tag Managera ani pikseli.</p>
+                ) : (
+                    <ul className="mt-1 grid gap-0.5">
+                        {legal.tools.map((t) => (
+                            <li key={t.name} className="flex justify-between gap-2 border-t py-0.5">
+                                <span className="truncate" title={`${t.ids.join(', ')} · ${t.source}`}>
+                                    {t.name}
+                                    {t.ids.length > 0 && <span className="text-muted-foreground"> · {t.ids.slice(0, 2).join(', ')}</span>}
+                                </span>
+                                <span className={cn('shrink-0 text-right font-medium', okCls(t.ok))}>{t.load}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+            <div>
+                <div className="text-muted-foreground text-xs">
+                    Dokumenty{legal.shop ? ` · sklep${legal.platform ? ` (${legal.platform})` : ''}` : ''}
+                </div>
+                <ul className="mt-1 grid gap-0.5">
+                    {legal.documents.map((d) => {
+                        const [label, ok] = DOC_STATUS[d.status] ?? [d.status, null];
+                        return (
+                            <li key={d.key} className="flex justify-between gap-2 border-t py-0.5">
+                                {d.url ? (
+                                    <a href={d.url} target="_blank" rel="noreferrer noopener" className="truncate hover:underline">
+                                        {d.label}
+                                    </a>
+                                ) : (
+                                    <span className="truncate">{d.label}</span>
+                                )}
+                                <span className={cn('shrink-0 font-medium', okCls(!d.required && d.status === 'missing' ? null : ok))}>{label}</span>
+                            </li>
+                        );
+                    })}
+                </ul>
+                {legal.promo && (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Omnibus: sprawdzono {legal.promo.checked} str.{' '}
+                        {legal.promo.found
+                            ? legal.promo.lowest
+                                ? '– przy promocjach jest najniższa cena z 30 dni.'
+                                : '– przy promocjach brakuje najniższej ceny z 30 dni.'
+                            : '– bez obniżonych cen.'}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
 }
 
 const kb = (v: number) => (v >= 1024 ? `${(v / 1024).toFixed(1).replace('.', ',')} MB` : `${v} KB`);
@@ -252,6 +342,7 @@ export function AuditReport({ report }: { report: Report }) {
                     </summary>
                     <div className="grid gap-3 border-t p-4">
                         {s.key === 'perf' && report.performance && <PerfSummary perf={report.performance} />}
+                        {s.key === 'legal' && report.legal && <LegalSummary legal={report.legal} />}
                         {s.groups.length === 0 && <p className="text-muted-foreground text-sm">Bez uwag.</p>}
                         {s.groups.map((g) => (
                             <div key={g.title}>

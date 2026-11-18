@@ -175,7 +175,7 @@ class DetailedAuditTest extends TestCase
         $this->assertSame(2, $r['version']);
         $this->assertSame('korepetycje online', $r['industry']);
         $keys = array_column($r['sections'], 'key');
-        $this->assertSame(['home', 'offer', 'detail', 'contact', 'site', 'code', 'perf', 'mobile'], $keys);
+        $this->assertSame(['home', 'offer', 'detail', 'contact', 'site', 'legal', 'code', 'perf', 'mobile'], $keys);
         $this->assertContains('przeskok z H2', array_column($r['pages'][0]['outline'], 'problem'));
 
         $all = collect($r['sections'])->flatMap(fn ($s) => collect($s['groups'])->flatMap(fn ($g) => $g['findings']));

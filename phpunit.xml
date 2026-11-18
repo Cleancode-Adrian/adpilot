@@ -20,6 +20,7 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="SECURITY_REQUIRE_2FA" value="false"/>
+        <env name="SITE_AUDIT_DELAY_MS" value="0"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>

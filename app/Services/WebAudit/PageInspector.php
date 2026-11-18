@@ -19,6 +19,7 @@ use Throwable;
  * - wykrywa błędy w kodzie, które widać tylko w źródle strony (linki www/bez www, zapis telefonów, piksel bez zgody,
  *   różne wersje plików na podstronach, puste elementy, liczniki z zerami, nazwy plików zamiast opisów obrazów…),
  * - wnioskuje o różnicach mobile/desktop z budowy kodu (ukryte warianty nagłówka, pozycje menu „#”, przyciski tylko „tel:”).
+ * Wydajność ocenia PerformanceInspector, a zgodność z prawem (zgody na śledzenie, RODO, wymogi dla sklepów) – LegalInspector.
  *
  * Uwagi mają format: page (rola podstrony albo 'site'), section ('page' | 'code' | 'mobile'), group, sev (pilne|srednie|drobne),
  * title, text, fix, evidence (cytat z kodu/treści), urls, verify (true = do potwierdzenia w przeglądarce).
@@ -59,7 +60,7 @@ class PageInspector
 
     private array $findings = [];
 
-    public function __construct(private PerformanceInspector $performance) {}
+    public function __construct(private PerformanceInspector $performance, private LegalInspector $legal) {}
 
     // ------------------------------------------------------------------ wejście
 
@@ -133,10 +134,21 @@ class PageInspector
             report($e);
         }
 
+        // Zgodność z prawem: zgody na śledzenie, polityka prywatności, dane firmy, wymogi dla sklepów (zwroty, Omnibus)
+        $legal = null;
+        try {
+            $legal = $this->legal->inspect($ok, $this->siteHost);
+            array_push($this->findings, ...$legal['findings']);
+            unset($legal['findings']);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         return [
             'pages' => array_map(fn ($p) => array_diff_key($p, array_flip(['raw', 'strings'])), $pages),
             'findings' => $this->findings,
             'performance' => $performance,
+            'legal' => $legal,
             'facts' => [
                 'host' => $this->siteHost,
                 'www' => $this->siteWww,
@@ -208,8 +220,17 @@ class PageInspector
                 $headers[strtolower($name)] = mb_substr(implode(', ', (array) $values), 0, 200);
             }
             $stats = rescue(fn () => $r->handlerStats(), [], false);
+            // nazwy ciasteczek ustawianych przez serwer od razu przy wejściu (bez zgody)
+            $cookies = [];
+            foreach ($r->headers() as $name => $values) {
+                if (strtolower($name) === 'set-cookie') {
+                    foreach ((array) $values as $v) {
+                        $cookies[] = trim(explode('=', (string) $v, 2)[0]);
+                    }
+                }
+            }
             $out[$u] = ['url' => $u, 'final_url' => $history ? end($history) : $u, 'status' => $r->status(), 'ok' => $r->successful() && $isHtml,
-                'body' => $isHtml ? $r->body() : '', 'error' => null,
+                'body' => $isHtml ? $r->body() : '', 'error' => null, 'cookies' => array_values(array_unique(array_filter($cookies))),
                 'headers' => array_intersect_key($headers, array_flip(['content-encoding', 'x-encoded-content-encoding', 'cache-control', 'server', 'x-cache', 'cf-cache-status', 'x-litespeed-cache',
                     'x-proxy-cache', 'x-wp-super-cache', 'x-rocket-nginx-serving-static', 'x-nginx-cache', 'x-sucuri-cache', 'age', 'content-type'])),
                 'ttfb_ms' => isset($stats['starttransfer_time']) && $stats['starttransfer_time'] > 0 ? (int) round($stats['starttransfer_time'] * 1000) : null];
@@ -263,7 +284,8 @@ class PageInspector
 
     private function snapshot(string $role, array $res): array
     {
-        $base = ['role' => $role, 'label' => self::ROLES[$role], 'url' => $res['url'], 'final_url' => $res['final_url'], 'status' => $res['status'], 'ok' => $res['ok'], 'blocked' => $res['blocked'] ?? null];
+        $base = ['role' => $role, 'label' => self::ROLES[$role], 'url' => $res['url'], 'final_url' => $res['final_url'], 'status' => $res['status'], 'ok' => $res['ok'], 'blocked' => $res['blocked'] ?? null,
+            'cookies' => $res['cookies'] ?? []];
         if (! $res['ok']) {
             return $base + ['title' => null, 'links' => [], 'emails' => [], 'raw' => ''];
         }
@@ -476,11 +498,24 @@ class PageInspector
                 'required' => $f->hasAttribute('required') || $f->getAttribute('aria-required') === 'true',
                 'options' => array_slice($options, 0, 40),
                 'consent_links' => $consentLinks,
+                'checked' => $f->hasAttribute('checked'),
             ];
         }
         $submit = $x->query('.//button | .//input[@type="submit"]', $form)->item(0);
+        $links = [];
+        foreach ($x->query('.//a[@href]', $form) as $a) {
+            /** @var DOMElement $a */
+            $links[] = $this->clean($a->textContent).' '.$a->getAttribute('href');
+        }
+        // tekst wokół formularza (klauzula RODO bywa tuż pod nim, poza znacznikiem <form>)
+        $after = $form->nextSibling;
+        while ($after && $after->nodeType !== XML_ELEMENT_NODE) {
+            $after = $after->nextSibling;
+        }
 
-        return ['fields' => $fields, 'submit' => $submit ? $this->clean($submit->textContent ?: $submit->getAttribute('value')) : null];
+        return ['fields' => $fields, 'submit' => $submit ? $this->clean($submit->textContent ?: $submit->getAttribute('value')) : null,
+            'text' => mb_substr($this->clean($form->textContent.' '.($after?->textContent ?? '')), 0, 6000), 'links' => array_slice($links, 0, 20),
+            'search' => strtolower($form->getAttribute('role')) === 'search' || (bool) $x->query('.//input[@type="search" or @name="s" or @name="q"]', $form)->length];
     }
 
     /** Tekst widoczny dla klienta w kolejności z kodu – materiał do przeglądu treści. */
@@ -634,13 +669,6 @@ class PageInspector
                     'W kodzie jest content="'.mb_substr($v, 0, 34).'…" – w tej postaci weryfikacja przez znacznik nie zadziała. Jeśli Search Console jest zweryfikowane inną metodą (np. DNS), nie ma problemu.',
                     'W polu weryfikacji wpisać sam kod (bez „google-site-verification=”).', 'content="'.mb_substr($v, 0, 40).'…"', [], true);
             }
-        }
-
-        // Piksel Facebooka w <noscript> – ładuje się bez zgody
-        if (preg_match('#<noscript[^>]*>(?:(?!</noscript>).)*facebook\.com/tr\?(?:(?!</noscript>).)*</noscript>#is', $home['raw'])) {
-            $this->add('site', 'code', 'Pomiar i zgody (RODO)', 'srednie', 'Piksel Facebooka w wersji bez JavaScript ładuje się bez zgody',
-                'Obrazek facebook.com/tr jest wstawiony bezpośrednio w kod strony (w znaczniku noscript). W tej wersji ładuje się bez względu na decyzję w banerze cookies.',
-                'Sprawdzić z osobą od RODO, czy wtyczka piksela jest spięta z banerem zgód, i usunąć wersję noscript albo warunkować ją zgodą.', '<noscript><img src="https://www.facebook.com/tr?id=…">', [], true);
         }
 
         // Różne wersje tych samych plików na podstronach (stara pamięć podręczna)

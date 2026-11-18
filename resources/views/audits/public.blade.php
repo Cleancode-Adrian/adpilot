@@ -205,6 +205,7 @@
         <tr><td class="square">■</td><td><strong>linki i formularze</strong> – dokąd prowadzą kafelki i przyciski, linki telefoniczne, pola, zgody;</td></tr>
         <tr><td class="square">■</td><td><strong>strukturę nagłówków</strong> (H1–H6) – pełny spis w załączniku;</td></tr>
         <tr><td class="square">■</td><td><strong>kod</strong> – menu i nagłówek w wersji na telefon i komputer, skrypty śledzące, wersje plików, dostępność;</td></tr>
+        <tr><td class="square">■</td><td><strong>zgodność z prawem</strong> – czy Google Analytics, Tag Manager, piksele reklamowe ładują się dopiero po zgodzie, baner cookies, polityka prywatności, informacje przy formularzach, dane firmy @if(! empty($r['legal']['shop'])), a w sklepie: regulamin, zwroty i wzór formularza odstąpienia, reklamacje, najniższa cena z 30 dni (Omnibus), dostępność (EAA)@endif;</td></tr>
         <tr><td class="square">■</td><td><strong>wydajność</strong> – Google PageSpeed na telefonie i komputerze, waga, wymiary i format obrazów, skrypty, czcionki, czas odpowiedzi serwera, kompresja i pamięć podręczna.</td></tr>
     </table>
     <p style="margin: 6px 0 4px">Dodatkowo cała strona przeszła sprawdzenie techniczne: do {{ $a['seo']['pages'] ?? config('adpilot.site_audit.prospect_pages') }} podstron pod kątem błędów i SEO technicznego, pomiar i zgody RODO oraz bezpieczeństwo.</p>
@@ -314,6 +315,50 @@
                 @if(! empty($pf['totals']))
                     <div class="note">Sprawdzono {{ $pf['totals']['images_checked'] }} {{ $pl($pf['totals']['images_checked'], 'obraz', 'obrazy', 'obrazów') }} z najważniejszych podstron – razem {{ $kbf($pf['totals']['images_kb']) }}@if($pf['totals']['saving_kb'] > 50), szacowana oszczędność po optymalizacji: ok. {{ $kbf($pf['totals']['saving_kb']) }}@endif.</div>
                 @endif
+            @endif
+        @endif
+
+        @if($s['key'] === 'legal' && ! empty($r['legal']))
+            @php
+                $lg = $r['legal'];
+                $okColor = fn ($ok) => $ok === true ? '#0a7d0a' : ($ok === false ? '#c0392b' : '#b55a1a');
+                $docStatus = ['ok' => ['jest', true], 'link' => ['jest link', true], 'in_text' => ['opisane w regulaminie / polityce', true], 'broken' => ['link nie działa', false],
+                    'missing' => ['nie znaleziono', false], 'unknown' => ['nie udało się sprawdzić', null]];
+                $banner = match ($lg['banner']) { 'cmp' => 'baner zgód: '.implode(', ', $lg['cmp']).($lg['cmp_auto'] ? ' (automatyczne blokowanie skryptów)' : ''),
+                    'own' => 'własny baner cookies (nie rozpoznano platformy)', 'info' => 'tylko komunikat „strona używa cookies” – bez możliwości odmowy', default => 'nie znaleziono banera cookies' };
+            @endphp
+            <h3>Narzędzia śledzące i zgody</h3>
+            @if($lg['tools'])
+                <table class="plan">
+                    <tr><th>Narzędzie</th><th>Identyfikator</th><th>Skąd</th><th>Kiedy się uruchamia</th></tr>
+                    @foreach($lg['tools'] as $tool)
+                        <tr>
+                            <td>{{ $tool['name'] }}</td>
+                            <td style="word-break: break-all">{{ implode(', ', $tool['ids']) ?: '–' }}</td>
+                            <td class="muted">{{ $tool['source'] }}</td>
+                            <td style="font-weight: bold; color: {{ $okColor($tool['ok']) }}">{{ $tool['load'] }}</td>
+                        </tr>
+                    @endforeach
+                </table>
+            @else
+                <p class="note">Nie wykryto Google Analytics, Tag Managera ani pikseli reklamowych – strona nie mierzy ruchu (to osobny problem marketingowy, opisany w części „Kod i technika”).</p>
+            @endif
+            <div class="note">Baner: {{ $banner }}.@if($lg['consent_mode']) Kod strony ustawia Google Consent Mode z domyślną odmową.@endif</div>
+
+            <h3>Dokumenty i informacje wymagane prawem</h3>
+            <table class="plan">
+                <tr><th>Dokument</th><th>Stan</th><th>Adres</th></tr>
+                @foreach($lg['documents'] as $doc)
+                    @php [$st, $stOk] = $docStatus[$doc['status']] ?? [$doc['status'], null]; if (! $doc['required'] && $doc['status'] === 'missing') { $stOk = null; } @endphp
+                    <tr>
+                        <td>{{ $doc['label'] }}@unless($doc['required'])<span class="muted small"> (jeśli dotyczy)</span>@endunless</td>
+                        <td style="font-weight: bold; color: {{ $okColor($stOk) }}">{{ $st }}{{ $doc['status'] === 'broken' && $doc['http'] ? ' ('.$doc['http'].')' : '' }}</td>
+                        <td class="small" style="word-break: break-all">{{ $doc['url'] ? preg_replace('#^https?://(www\.)?#', '', $doc['url']) : '–' }}</td>
+                    </tr>
+                @endforeach
+            </table>
+            @if(! empty($lg['promo']))
+                <div class="note">Omnibus: sprawdzono {{ $lg['promo']['checked'] }} {{ $pl($lg['promo']['checked'], 'stronę', 'strony', 'stron') }} sklepu – {{ $lg['promo']['found'] ? ($lg['promo']['lowest'] ? 'przy promocjach jest informacja o najniższej cenie z 30 dni.' : 'przy promocjach brakuje informacji o najniższej cenie z 30 dni.') : 'nie było na nich obniżonych cen.' }}</div>
             @endif
         @endif
 
