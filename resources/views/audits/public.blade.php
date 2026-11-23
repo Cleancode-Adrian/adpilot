@@ -343,7 +343,8 @@
             @else
                 <p class="note">Nie wykryto Google Analytics, Tag Managera ani pikseli reklamowych – strona nie mierzy ruchu (to osobny problem marketingowy, opisany w części „Kod i technika”).</p>
             @endif
-            <div class="note">Baner: {{ $banner }}.@if($lg['consent_mode']) Kod strony ustawia Google Consent Mode z domyślną odmową.@endif</div>
+            <div class="note">Baner: {{ $banner }}.@if($lg['consent_mode']) Kod strony ustawia Google Consent Mode z domyślną odmową.@endif
+                @if(! empty($lg['browser'])) Kolumna „Kiedy się uruchamia” pochodzi ze sprawdzenia w prawdziwej przeglądarce: stronę otwarto bez klikania w banerze i zapisano, które narzędzia wysłały dane lub zapisały ciasteczka.@endif</div>
 
             <h3>Dokumenty i informacje wymagane prawem</h3>
             <table class="plan">

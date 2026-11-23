@@ -96,6 +96,7 @@ interface Legal {
     cmp: string[];
     cmp_auto: boolean;
     consent_mode: boolean;
+    browser?: boolean;
     tools: { name: string; ids: string[]; source: string; load: string; ok: boolean | null }[];
     documents: { key: string; label: string; url: string | null; status: string; http: number | null; required: boolean }[];
     promo: { checked: number; found: boolean; lowest: boolean | null; url: string | null } | null;
@@ -125,7 +126,10 @@ function LegalSummary({ legal }: { legal: Legal }) {
     return (
         <div className="grid gap-3 text-sm md:grid-cols-2">
             <div>
-                <div className="text-muted-foreground text-xs">Narzędzia śledzące i zgody · {banner}</div>
+                <div className="text-muted-foreground text-xs">
+                    Narzędzia śledzące i zgody · {banner}
+                    {legal.browser ? ' · sprawdzone w prawdziwej przeglądarce' : ''}
+                </div>
                 {legal.tools.length === 0 ? (
                     <p className="text-muted-foreground mt-1">Nie wykryto Google Analytics, Tag Managera ani pikseli.</p>
                 ) : (

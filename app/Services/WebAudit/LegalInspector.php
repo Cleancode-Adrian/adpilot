@@ -141,6 +141,8 @@ class LegalInspector
 
     private int $requests = 0;
 
+    public function __construct(private BrowserConsentCheck $browser) {}
+
     /**
      * @param  array<string, array>  $pages  podstrony z PageInspector (z surowym kodem)
      * @return array{findings: list<array>, shop: bool, platform: ?string, banner: ?string, cmp: list<string>, cmp_auto: bool, consent_mode: bool, tools: list<array>, documents: list<array>, promo: ?array}
@@ -194,6 +196,13 @@ class LegalInspector
 
         // --- kody śledzące i zgody
         $tracking = $this->tracking($pages, $code);
+        // jeśli na serwerze jest przeglądarka – sprawdzamy, co faktycznie dzieje się przed zgodą (rozstrzyga m.in. tagi w GTM)
+        if ($pages['home'] ?? null) {
+            $seen = $this->browser->run($pages['home']['final_url'] ?? $pages['home']['url']);
+            if ($seen !== null) {
+                $tracking = $this->applyBrowser($tracking, $seen);
+            }
+        }
         $this->consentFindings($tracking, $pages);
 
         // --- polityka prywatności, formularze, dane firmy
@@ -220,6 +229,7 @@ class LegalInspector
             'cmp' => $tracking['cmp'],
             'cmp_auto' => $tracking['cmp_auto'],
             'consent_mode' => $tracking['consent_default'],
+            'browser' => ! empty($tracking['browser']), // zgody sprawdzone w prawdziwej przeglądarce, a nie tylko w kodzie
             'tools' => array_map(fn ($t) => array_intersect_key($t, array_flip(['name', 'ids', 'source', 'load', 'ok'])), $tracking['tools']),
             'documents' => array_values(array_map(fn ($d) => ['key' => $d['key'], 'label' => $d['label'], 'url' => $d['url'], 'status' => $d['status'], 'http' => $d['http'],
                 'required' => $this->required($d['key'], $shop, $tracking, $forms)], array_filter($docs, fn ($d) => $shop || in_array($d['key'], ['privacy', 'cookies', 'terms'], true)))),
@@ -341,10 +351,63 @@ class LegalInspector
         return ['tools' => array_values($tools), 'cmp' => $cmp, 'cmp_auto' => (bool) $auto, 'consent_default' => $consentDefault, 'banner' => $banner];
     }
 
+    /**
+     * Wynik z prawdziwej przeglądarki (strona otwarta bez klikania w baner) nadpisuje ocenę z kodu:
+     * narzędzie, które wysłało dane lub zapisało ciasteczko – „przed zgodą”; pozostałe wykryte w kodzie – „czeka na zgodę”.
+     */
+    private function applyBrowser(array $t, array $seen): array
+    {
+        $tools = collect($t['tools'])->keyBy('name')->all();
+        foreach ($seen['tools'] as $name => $s) {
+            if (! isset($tools[$name]) && ! $s['sent']) {
+                continue;
+            }
+            $tools[$name] ??= ['name' => $name, 'ids' => [], 'source' => 'wykryte w przeglądarce', 'pages' => [], 'evidence' => null];
+            if ($s['sent']) {
+                $proof = implode(', ', array_filter([$s['request'] ? 'zapytanie '.$s['request'] : null, $s['cookies'] ? 'ciasteczka '.implode(', ', array_slice($s['cookies'], 0, 4)) : null]));
+                $tools[$name] = ['load' => 'wysyła dane przed zgodą (sprawdzone w przeglądarce)', 'ok' => false, 'evidence' => $name.': '.$proof, 'confirmed' => true] + $tools[$name];
+            } else {
+                $tools[$name] = ['load' => 'Consent Mode: tylko sygnał bez ciasteczek (sprawdzone w przeglądarce)', 'ok' => true, 'confirmed' => true] + $tools[$name];
+            }
+        }
+        $anySent = (bool) array_filter($seen['tools'], fn ($s) => $s['sent']);
+        foreach ($tools as $name => $tool) {
+            if (! empty($tool['confirmed']) || ! isset(self::BROWSER_CHECKED[$name])) {
+                continue;
+            }
+            // wykryte w kodzie, a w przeglądarce nic nie wysłało ani nie zapisało
+            $tools[$name] = $name === 'Google Tag Manager'
+                ? ['load' => $anySent ? 'uruchamia tagi przed zgodą (sprawdzone w przeglądarce)' : 'tagi czekają na zgodę (sprawdzone w przeglądarce)', 'ok' => ! $anySent, 'confirmed' => true] + $tool
+                : ['load' => 'nie uruchamia się przed zgodą (sprawdzone w przeglądarce)', 'ok' => true, 'confirmed' => true] + $tool;
+        }
+        // baner widoczny na ekranie, którego nie było widać w kodzie (wstawiany skryptem)
+        if ($t['banner'] === null && $seen['banner']) {
+            $choice = (bool) preg_grep('/odrzu|nie zgadzam|odmawiam|tylko niezb|ustawieni|dostosuj|zarządz|preferenc|reject|decline|deny|settings|customi[sz]e|manage/iu', $seen['banner']['buttons']);
+            $t['banner'] = $choice ? 'own' : 'info';
+        }
+
+        return ['tools' => array_values($tools), 'browser' => true] + $t;
+    }
+
+    /** narzędzia, których aktywność umiemy rozpoznać w przeglądarce (pozostałe zostają z oceną z kodu) */
+    private const BROWSER_CHECKED = ['Google Tag Manager' => 1, 'Google Analytics 4' => 1, 'Google Ads' => 1, 'Meta Pixel (Facebook)' => 1, 'TikTok Pixel' => 1, 'Hotjar' => 1,
+        'Microsoft Clarity' => 1, 'LinkedIn Insight' => 1, 'Microsoft Ads (UET)' => 1, 'Pinterest Tag' => 1];
+
     private function consentFindings(array $t, array $pages): void
     {
         $tools = $t['tools'];
         $bad = array_values(array_filter($tools, fn ($x) => $x['ok'] === false));
+        $confirmed = array_values(array_filter($bad, fn ($x) => ! empty($x['confirmed'])));
+        if ($confirmed) {
+            // Potwierdzone w przeglądarce – bez „do potwierdzenia”
+            $names = implode('; ', array_map(fn ($x) => $x['name'].($x['ids'] ? ' ('.implode(', ', array_slice($x['ids'], 0, 2)).')' : ''), $bad));
+            $this->add(self::G_CONSENT, 'pilne', $t['banner'] === null ? 'Kody śledzące działają bez zgody – na stronie nie ma banera cookies' : 'Kody śledzące wysyłają dane przed wyrażeniem zgody',
+                'Sprawdziliśmy to w prawdziwej przeglądarce: po wejściu na stronę, bez klikania czegokolwiek'.($t['banner'] === null ? ' (banera zgód nie ma)' : ' w banerze').', dane wysłały lub ciasteczka zapisały: '.$names.'. '
+                .($t['banner'] === 'info' ? 'Komunikat „strona używa cookies” bez możliwości odmowy nie jest zgodą. ' : '').self::LAW_COOKIES.' W obecnej postaci strona nie spełnia tych wymogów – to ryzyko skargi do UODO.',
+                'Ustawić baner zgód tak, aby blokował te narzędzia do czasu zgody (wyzwalacze / Consent Mode v2 w GTM, kategorie zgód we wtyczkach), i sprawdzić ponownie w trybie incognito.',
+                implode("\n", array_filter(array_map(fn ($x) => $x['evidence'], array_slice($bad, 0, 5)))) ?: null);
+            $bad = []; // dalsze uwagi „z kodu” o tym samym byłyby powtórzeniem
+        }
         $unknown = array_values(array_filter($tools, fn ($x) => $x['ok'] === null));
         $list = fn (array $xs) => implode('; ', array_map(fn ($x) => $x['name'].($x['ids'] ? ' ('.implode(', ', array_slice($x['ids'], 0, 3)).')' : '').' – '.$x['source'], $xs));
         $evidence = implode("\n", array_filter(array_map(fn ($x) => $x['evidence'], array_slice($bad, 0, 3))));
@@ -365,12 +428,12 @@ class LegalInspector
                     'Podpiąć skrypty pod baner: przenieść je do GTM z wyzwalaczem po zgodzie / Consent Mode albo oznaczyć jako blokowane (np. type="text/plain" z kategorią zgody), włączyć Consent Mode v2.',
                     $evidence ?: null, [], $t['banner'] === 'own' || (bool) array_filter($bad, fn ($x) => $x['source'] !== 'kod strony')),
             };
-        } elseif ($tools && $t['banner'] === 'info') {
+        } elseif (! $confirmed && $tools && $t['banner'] === 'info') {
             $this->add(self::G_CONSENT, 'srednie', 'Baner cookies bez możliwości odmowy',
                 'Komunikat o cookies nie daje wyboru (brak „Odrzucam” / „Ustawienia”). Nie widać, by narzędzia startowały przed zgodą, ale sam komunikat nie jest zgodą w rozumieniu przepisów.',
                 'Zastąpić komunikat banerem zgód z przyciskami „Akceptuję” i „Odrzucam” na tym samym poziomie.', null, [], true);
         }
-        if ($unknown && ! $bad) {
+        if ($unknown && ! $bad && ! $confirmed) {
             $this->add(self::G_CONSENT, 'drobne', 'Do sprawdzenia: czy narzędzia z Tag Managera czekają na zgodę',
                 'Strona ma baner zgód, a narzędzia są uruchamiane przez Tag Managera lub wtyczkę: '.$list($unknown).'. Z kodu strony nie da się przesądzić, czy ich tagi czekają na zgodę – zależy to od ustawień kontenera (Consent Mode, wyzwalacze).',
                 'W trybie incognito, przed kliknięciem w banerze, sprawdzić w Tag Assistant (lub w narzędziach przeglądarki → Sieć), czy nie wysyłają się zapytania do google-analytics.com, facebook.com itp.', null, [], true);

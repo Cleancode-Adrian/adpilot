@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\WebAudit;
 use App\Services\WebAudit\AuditReportBuilder;
+use App\Services\WebAudit\BrowserConsentCheck;
 use App\Services\WebAudit\PageInspector;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -176,6 +177,52 @@ class LegalAuditTest extends TestCase
         $this->assertStringNotContainsString('Formularz bez informacji', $titles);
         $this->assertStringNotContainsString('NIP', $titles);
         $this->assertStringNotContainsString('Omnibus', $titles);
+    }
+
+    /** Przeglądarka rozstrzyga to, czego nie widać w kodzie: tagi z Tag Managera i narzędzia, których w kodzie strony w ogóle nie ma. */
+    public function test_browser_check_overrides_guesses_from_code(): void
+    {
+        $this->fakeSites();
+        $check = new BrowserConsentCheck;
+        $seen = $check->classify([
+            'requests' => [
+                'https://www.googletagmanager.com/gtm.js?id=GTM-ABCD12',
+                'https://region1.google-analytics.com/g/collect?v=2&tid=G-ZZZ1234567&gcs=G100&gcd=13l3l3l3l1', // Consent Mode: odmowa – sam sygnał
+                'https://b.clarity.ms/collect',
+                'https://googleads.g.doubleclick.net/pagead/id', // odtwarzacz YouTube, nie Google Ads
+            ],
+            'cookies' => [['name' => 'CookieConsent', 'domain' => 'dobra.example']],
+            'banner' => ['text' => 'Ta strona używa cookies', 'buttons' => ['Akceptuję', 'Odrzucam']],
+        ]);
+        $this->assertSame(['Google Analytics 4', 'Microsoft Clarity'], array_keys($seen['tools']));
+        $this->assertTrue($seen['tools']['Google Analytics 4']['denied_only']);
+        $this->assertFalse($seen['tools']['Google Analytics 4']['sent']);
+        $this->assertTrue($seen['tools']['Microsoft Clarity']['sent']);
+        $this->assertFalse((new BrowserConsentCheck)->available(), 'domyślnie wyłączone – audyt działa bez przeglądarki');
+
+        $this->app->bind(BrowserConsentCheck::class, fn () => new class($seen) extends BrowserConsentCheck
+        {
+            public function __construct(private array $seen) {}
+
+            public function run(string $url): ?array
+            {
+                return $this->seen;
+            }
+        });
+        $r = app(PageInspector::class)->inspect('https://dobra.example');
+        $tools = collect($r['legal']['tools'])->keyBy('name');
+        $this->assertTrue($r['legal']['browser']);
+        $this->assertTrue($tools['Google Analytics 4']['ok']);
+        $this->assertStringContainsString('sprawdzone w przeglądarce', $tools['Google Analytics 4']['load']);
+        $this->assertFalse($tools['Microsoft Clarity']['ok'], 'narzędzie niewidoczne w kodzie strony, a wysyła dane');
+        $this->assertFalse($tools['Google Tag Manager']['ok']);
+        $this->assertTrue($tools['Meta Pixel (Facebook)']['ok']);
+
+        $f = $this->titles($r)['Kody śledzące wysyłają dane przed wyrażeniem zgody'];
+        $this->assertSame('pilne', $f['sev']);
+        $this->assertFalse($f['verify'], 'potwierdzone w przeglądarce – bez „do potwierdzenia”');
+        $this->assertStringContainsString('clarity.ms/collect', $f['evidence']);
+        $this->assertFalse($this->titles($r)->has('Do sprawdzenia: czy narzędzia z Tag Managera czekają na zgodę'));
     }
 
     public function test_info_only_cookie_bar_is_not_consent(): void

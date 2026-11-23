@@ -66,6 +66,13 @@ return [
     'sync_lookback_days' => (int) env('ADPILOT_SYNC_LOOKBACK', 30),
     'live_sync' => (bool) env('ADPILOT_LIVE_SYNC', true), // dane z reklam co godzinę (6:15–23:15)
 
+    // Sprawdzanie zgód w prawdziwej przeglądarce (wymaga Chrome/Chromium na serwerze) – bez tego audyt ocenia zgody z samego kodu
+    'browser_check' => [
+        'enabled' => (bool) env('BROWSER_CHECK', false),
+        'chrome' => env('CHROME_PATH'), // puste = szukaj w typowych miejscach (/usr/bin/google-chrome, /usr/bin/chromium…)
+        'node' => env('NODE_BINARY', 'node'),
+    ],
+
     // Audyt zbiorczy (lista stron audytowana po kolei)
     'audit_batch' => [
         'concurrency' => (int) env('AUDIT_BATCH_CONCURRENCY', 1), // ile stron z listy naraz (więcej ma sens tylko przy kilku workerach kolejki)
