@@ -6,7 +6,19 @@ import AppLayout from '@/layouts/app-layout';
 import { dateTime, num } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertOctagon, AlertTriangle, CheckCircle2, Download, ExternalLink, Info, RefreshCw, Trash2, UserPlus, XCircle } from 'lucide-react';
+import {
+    AlertOctagon,
+    AlertTriangle,
+    CheckCircle2,
+    Download,
+    ExternalLink,
+    Info,
+    RefreshCw,
+    Sparkles,
+    Trash2,
+    UserPlus,
+    XCircle,
+} from 'lucide-react';
 import { useEffect } from 'react';
 import { scoreTone } from './index';
 
@@ -90,6 +102,7 @@ export default function AuditShow({
     pdf_url,
     report,
     batch,
+    has_ai,
 }: {
     audit: Audit;
     areas: Record<string, string>;
@@ -97,6 +110,7 @@ export default function AuditShow({
     pdf_url: string;
     report: Report | null;
     batch?: { id: number; name: string } | null;
+    has_ai?: boolean;
 }) {
     const running = audit.status === 'pending' || audit.status === 'running';
     useEffect(() => {
@@ -164,9 +178,20 @@ export default function AuditShow({
                             </Button>
                         )}
                         {!running && (
-                            <Button variant="outline" onClick={() => router.post(`/audits/${audit.id}/rerun`)}>
-                                <RefreshCw className="size-4" /> Ponów
-                            </Button>
+                            <>
+                                {batch && has_ai && (
+                                    <Button
+                                        variant="outline"
+                                        title="Ponowny audyt tej jednej strony z pełnym przeglądem treści przez AI (mocniejszy model niż w audycie zbiorczym)"
+                                        onClick={() => router.post(`/audits/${audit.id}/rerun`, { ai_full: true })}
+                                    >
+                                        <Sparkles className="size-4" /> Ponów z pełnym AI
+                                    </Button>
+                                )}
+                                <Button variant="outline" onClick={() => router.post(`/audits/${audit.id}/rerun`)}>
+                                    <RefreshCw className="size-4" /> Ponów
+                                </Button>
+                            </>
                         )}
                         <Button variant="ghost" title="Usuń" onClick={() => confirm('Usunąć audyt?') && router.delete(`/audits/${audit.id}`)}>
                             <Trash2 className="size-4" />

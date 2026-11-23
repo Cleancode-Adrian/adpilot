@@ -8,6 +8,7 @@ use App\Models\AuditBatchItem;
 use App\Models\User;
 use App\Models\WebAudit;
 use App\Services\Sales\Followups;
+use App\Services\WebAudit\AiPageReviewer;
 use App\Services\WebAudit\BatchListParser;
 use App\Services\WebAudit\PageInspector;
 use App\Services\WebAudit\SecurityScanner;
@@ -299,5 +300,33 @@ class AuditBatchTest extends TestCase
         $this->assertSame('done', $batch->fresh()->status, 'zakończonej listy nie da się wstrzymać');
         $this->assertSame('ciężkie zdjęcia', AuditBatchItem::problemKey('Ciężkie zdjęcia (3 pliki powyżej 250 KB)'));
         $this->assertSame(AuditBatchItem::problemKey('Podstrona „Kontakt” nie działa'), AuditBatchItem::problemKey('Podstrona „Oferta” nie działa'));
+    }
+
+    /** Lista idzie tańszym modelem i poziomem; „Ponów z pełnym AI” przy wybranej stronie wraca do pełnego przeglądu. */
+    public function test_batch_uses_cheaper_ai_and_full_ai_rerun(): void
+    {
+        $this->fakeSites();
+        config(['adpilot.ai.api_key' => 'test-key', 'adpilot.ai.model' => 'claude-opus-5-5', 'adpilot.ai.batch_audit_model' => 'claude-sonnet-5-5']);
+        $calls = new \ArrayObject;
+        $this->app->bind(AiPageReviewer::class, fn () => new class($calls) extends AiPageReviewer
+        {
+            public function __construct(private \ArrayObject $calls) {}
+
+            protected function request(string $system, string $prompt): ?string
+            {
+                $this->calls[] = [$this->model, $this->effort];
+
+                return null;
+            }
+        });
+        $this->actingAs(User::factory()->create());
+        $this->post('/audit-batches', ['list' => 'alfa-test.pl'])->assertRedirect();
+        $batch = AuditBatch::first();
+        $this->post("/audit-batches/{$batch->id}/start", ['ai' => true])->assertRedirect();
+        $this->assertSame([['claude-sonnet-5-5', 'medium']], $calls->getArrayCopy());
+
+        $audit = WebAudit::first();
+        $this->post("/audits/{$audit->id}/rerun", ['ai_full' => true])->assertRedirect();
+        $this->assertSame(['claude-opus-5-5', 'high'], $calls[1]);
     }
 }

@@ -48,6 +48,7 @@ return [
         'effort' => env('ADPILOT_AI_EFFORT', 'medium'),
         'audit_effort' => env('ADPILOT_AUDIT_AI_EFFORT', 'high'), // przegląd treści w audycie strony – dokładność ważniejsza niż czas
         'batch_audit_effort' => env('ADPILOT_BATCH_AUDIT_AI_EFFORT', 'medium'), // audyt zbiorczy: wiele stron naraz – niższy koszt na stronę (low | medium | high)
+        'batch_audit_model' => env('ADPILOT_BATCH_AUDIT_AI_MODEL', 'claude-sonnet-5-5'), // audyt zbiorczy: tańszy model; puste = ten sam co wyżej
     ],
 
     'pagespeed' => [

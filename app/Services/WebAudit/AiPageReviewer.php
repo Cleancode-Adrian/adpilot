@@ -69,12 +69,16 @@ class AiPageReviewer
     /** Poziom dokładności (i kosztu) zapytania – ustawiany przy każdym przeglądzie. */
     protected string $effort = 'high';
 
-    public function review(array $inspection, array $autoFindings, ?string $companyName, ?string $effort = null): ?array
+    /** Model użyty w tym przeglądzie (audyt zbiorczy może iść na tańszym niż pojedynczy). */
+    protected string $model = '';
+
+    public function review(array $inspection, array $autoFindings, ?string $companyName, ?string $effort = null, ?string $model = null): ?array
     {
         if (! config('adpilot.ai.api_key')) {
             return null;
         }
         $this->effort = $effort ?: (string) config('adpilot.ai.audit_effort', 'high');
+        $this->model = $model ?: (string) config('adpilot.ai.model');
         $json = $this->request(self::SYSTEM, $this->prompt($inspection, $autoFindings, $companyName));
         if ($json === null) {
             return null;
@@ -99,7 +103,7 @@ class AiPageReviewer
             'verify' => (bool) ($f['verify'] ?? false),
             'source' => 'ai',
         ], $data['findings']), fn ($f) => $f['title'] !== '' && $f['text'] !== ''));
-        $data['model'] = config('adpilot.ai.model');
+        $data['model'] = $this->model;
 
         return $data;
     }
@@ -109,7 +113,7 @@ class AiPageReviewer
     {
         try {
             $stream = (new Anthropic(apiKey: config('adpilot.ai.api_key')))->beta->messages->createStream(
-                model: config('adpilot.ai.model'),
+                model: $this->model,
                 maxTokens: 64000,
                 system: $system,
                 messages: [['role' => 'user', 'content' => $prompt]],

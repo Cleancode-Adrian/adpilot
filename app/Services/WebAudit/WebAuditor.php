@@ -111,8 +111,11 @@ class WebAuditor
         if ($inspection && ($audit->options['ai'] ?? true)) { // w audycie zbiorczym przegląd AI można wyłączyć
             try {
                 // audyt zbiorczy to kilkadziesiąt stron naraz – tańszy poziom przeglądu, żeby nie spalić kredytów AI
+                // Wyjątek: „Ponów z pełnym przeglądem AI” przy wybranej stronie z listy (ai_full) – jak w pojedynczym audycie.
+                $cheap = $audit->audit_batch_id && empty($audit->options['ai_full']);
                 $ai = $this->reviewer->review($inspection, $inspection['findings'], $audit->name,
-                    $audit->audit_batch_id ? (string) config('adpilot.ai.batch_audit_effort', 'medium') : null);
+                    $cheap ? (string) config('adpilot.ai.batch_audit_effort', 'medium') : null,
+                    $cheap ? (string) config('adpilot.ai.batch_audit_model') : null);
             } catch (Throwable $e) {
                 report($e);
             }

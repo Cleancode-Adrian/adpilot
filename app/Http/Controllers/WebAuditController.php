@@ -59,6 +59,7 @@ class WebAuditController extends Controller
 
         return Inertia::render('audits/show', [
             'batch' => $audit->batch?->only(['id', 'name']),
+            'has_ai' => (bool) config('adpilot.ai.api_key'),
             'audit' => $audit->makeHidden('report'),
             'report' => $this->report($audit),
             'areas' => WebAuditor::AREAS,
@@ -70,6 +71,9 @@ class WebAuditController extends Controller
     public function rerun(Request $request, WebAudit $audit)
     {
         $copy = WebAudit::create($audit->only(['url', 'name', 'email', 'client_id', 'audit_batch_id', 'options', 'followup_off']) + ['token' => Str::random(40), 'created_by' => $request->user()->id]);
+        if ($request->boolean('ai_full')) { // wybrana strona z listy: pełny przegląd treści (mocny model), np. przed pokazaniem klientowi
+            $copy->update(['options' => ['ai' => true, 'ai_full' => true] + ($copy->options ?? [])]);
+        }
         // audyt z listy zbiorczej: nowy wynik zastępuje poprzedni w zestawieniu
         $audit->batchItem?->update(['web_audit_id' => $copy->id, 'summary' => null]);
         RunWebAuditJob::dispatch($copy);
