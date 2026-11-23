@@ -56,7 +56,7 @@
 </table>
 <p class="muted" style="margin: 5px 0">
     Ranking stron, najczęstsze problemy, a dalej każda strona: sprawy pilne (z opisem) i średnie (z zaleceniem). Drobne uwagi i pełne opisy
-    są w raportach poszczególnych stron i w arkuszu wszystkich uwag ({{ $reportUrl }}).
+    są w pełnych raportach poszczególnych stron ({{ $reportUrl }}).
     PILNE – traci klientów lub pieniądze, wprowadza w błąd albo niesie ryzyko prawne; ŚREDNIE – wyraźnie utrudnia decyzję lub kontakt.
     Audyt czyta kod strony – punkty „do potwierdzenia” warto sprawdzić w przeglądarce.
 </p>
