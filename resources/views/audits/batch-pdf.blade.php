@@ -15,7 +15,7 @@
 <html lang="pl">
 <head>
     <meta charset="utf-8">
-    <title>{{ $batch->name }} – audyt zbiorczy</title>
+    <title>{{ $batch->name }}</title>
     <style>
         @page { margin: 16mm 14mm 16mm 14mm; }
         body { font-family: "DejaVu Sans", sans-serif; color: #1a1a1a; font-size: 8.6px; line-height: 1.45; }
@@ -41,7 +41,7 @@
 <div class="footer">{{ $batch->name }} – audyt zbiorczy | {{ $date }} · {{ $agency }}</div>
 <div class="brandbar"></div>
 <strong style="font-size: 12px">{{ $agency }}</strong>
-<h1>{{ $batch->name }} – audyt zbiorczy</h1>
+<h1>{{ str_contains(mb_strtolower($batch->name), 'audyt') ? $batch->name : $batch->name.' – audyt zbiorczy' }}</h1>
 <div class="muted">{{ $done->count() }} {{ $pl($done->count(), 'strona', 'strony', 'stron') }} · treść, kod, zgodność z prawem, wydajność, bezpieczeństwo · stan na {{ $date }}</div>
 
 <h2>Podsumowanie</h2>
@@ -55,9 +55,10 @@
     </tr>
 </table>
 <p class="muted" style="margin: 5px 0">
-    To skrócona wersja do druku: ranking stron, najczęstsze problemy i sprawy pilne każdej strony. Sprawy średnie i drobne, pełne opisy
-    oraz raporty poszczególnych stron: {{ $reportUrl }} (tam też arkusz wszystkich uwag dla Excela).
-    PILNE – traci klientów lub pieniądze, wprowadza w błąd albo niesie ryzyko prawne. Audyt czyta kod strony – punkty „do potwierdzenia” warto sprawdzić w przeglądarce.
+    Ranking stron, najczęstsze problemy, a dalej każda strona: sprawy pilne (z opisem) i średnie (z zaleceniem). Drobne uwagi i pełne opisy
+    są w raportach poszczególnych stron i w arkuszu wszystkich uwag ({{ $reportUrl }}).
+    PILNE – traci klientów lub pieniądze, wprowadza w błąd albo niesie ryzyko prawne; ŚREDNIE – wyraźnie utrudnia decyzję lub kontakt.
+    Audyt czyta kod strony – punkty „do potwierdzenia” warto sprawdzić w przeglądarce.
 </p>
 
 @if($ranking->isNotEmpty())
@@ -99,7 +100,7 @@
     </table>
 @endif
 
-<h2>Sprawy pilne – strona po stronie</h2>
+<h2>Strona po stronie</h2>
 @foreach($done as $s)
     <div class="site">
         <table>
@@ -112,20 +113,39 @@
             @foreach($areas as $k => $label){{ $label }}: {{ $s['areas'][$k] ?? '–' }}{{ $loop->last ? '' : ' · ' }}@endforeach
             | uwagi: {{ $s['counts']['pilne'] ?? 0 }} pilnych, {{ $s['counts']['srednie'] ?? 0 }} średnich, {{ $s['counts']['drobne'] ?? 0 }} drobnych
         </div>
+        <div class="muted">{{ preg_replace('#^https?://#', '', $s['url']) }}@if(count($s['pages']) > 1) · sprawdzone podstrony: {{ collect($s['pages'])->map(fn ($p) => $p['label'].($p['ok'] ? '' : ' (nie działa)'))->implode(', ') }}@endif</div>
+        @if($s['summary'])<p style="margin: 3px 0">{{ $s['summary'] }}</p>@endif
         @if($s['pilne'])
-            <table class="find" style="margin-top: 3px">
+            <div style="font-weight: bold; color: {{ $sevBg['pilne'] }}; margin-top: 4px">Pilne</div>
+            <table class="find">
                 @foreach($s['pilne'] as $f)
                     <tr>
                         <td style="width: 26px" class="muted">{{ $f['id'] }}</td>
                         <td>
                             <strong>{{ $f['title'] }}</strong>{{ $f['verify'] ? ' (do potwierdzenia)' : '' }}
-                            @if($f['fix'])<div>Co zrobić: {{ \Illuminate\Support\Str::limit($f['fix'], 260) }}</div>@endif
+                            <div>{{ \Illuminate\Support\Str::limit($f['text'], 520) }}</div>
+                            @if($f['fix'])<div><strong>Co zrobić:</strong> {{ \Illuminate\Support\Str::limit($f['fix'], 320) }}</div>@endif
                         </td>
                     </tr>
                 @endforeach
             </table>
         @else
             <div class="muted" style="margin-top: 2px">Bez spraw pilnych.</div>
+        @endif
+        @if($s['srednie'])
+            <div style="font-weight: bold; color: {{ $sevBg['srednie'] }}; margin-top: 4px">Średnie</div>
+            <table class="find">
+                @foreach($s['srednie'] as $f)
+                    <tr>
+                        <td style="width: 26px" class="muted">{{ $f['id'] }}</td>
+                        <td>
+                            <strong>{{ $f['title'] }}</strong>{{ $f['verify'] ? ' (do potwierdzenia)' : '' }}
+                            @if($f['fix'])<div>Co zrobić: {{ \Illuminate\Support\Str::limit($f['fix'], 260) }}</div>@endif
+                        </td>
+                        <td style="width: 22%" class="muted">{{ $f['section'] }}</td>
+                    </tr>
+                @endforeach
+            </table>
         @endif
     </div>
 @endforeach

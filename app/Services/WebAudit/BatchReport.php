@@ -200,12 +200,23 @@ class BatchReport
                     'public_url' => route('public.web-audit', $audit->token),
                     'pdf_url' => route('public.web-audit.pdf', $audit->token),
                 ]);
+                // ta sama uwaga na kilku podstronach (np. „Brak głównego nagłówka H1”) – jeden wiersz z listą podstron
+                $merged = [];
                 foreach ($this->findings($r) as $f) {
-                    if ($f['sev'] === 'pilne') {
-                        $site['pilne'][] = $f;
-                    } elseif ($f['sev'] === 'srednie') {
-                        $site['srednie'][] = $f;
+                    if (! in_array($f['sev'], ['pilne', 'srednie'], true)) {
+                        continue;
                     }
+                    $key = $f['sev'].'|'.$f['title'];
+                    if (isset($merged[$key])) {
+                        $merged[$key]['section'] .= in_array($f['section'], explode(', ', $merged[$key]['section']), true) ? '' : ', '.$f['section'];
+                        $merged[$key]['verify'] = $merged[$key]['verify'] || $f['verify'];
+
+                        continue;
+                    }
+                    $merged[$key] = $f;
+                }
+                foreach ($merged as $f) {
+                    $site[$f['sev']][] = $f;
                 }
             } elseif ($audit && $audit->status === 'failed') {
                 $site['error'] = $audit->error;

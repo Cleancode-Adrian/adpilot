@@ -229,8 +229,11 @@ export default function AuditBatchShow({
                                     </a>
                                 </Button>
                                 <Button variant="outline" asChild>
-                                    <a href={pdf_url} title="Skrócony PDF: ranking, najczęstsze problemy i pilne sprawy każdej strony">
-                                        <FileDown className="size-4" /> PDF (skrót)
+                                    <a
+                                        href={pdf_url}
+                                        title="Raport zbiorczy w PDF: ranking, najczęstsze problemy, sprawy pilne i średnie każdej strony"
+                                    >
+                                        <FileDown className="size-4" /> Raport PDF
                                     </a>
                                 </Button>
                                 <CopyLink url={public_url} label="Kopiuj link do raportu" />

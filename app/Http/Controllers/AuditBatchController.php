@@ -213,12 +213,12 @@ class AuditBatchController extends Controller
         ]);
     }
 
-    /** Skrócony PDF całej listy: podsumowanie, ranking, najczęstsze problemy i pilne sprawy każdej strony. */
+    /** Raport zbiorczy w PDF: podsumowanie, ranking, najczęstsze problemy oraz sprawy pilne i średnie każdej strony. */
     public function publicPdf(string $token, BatchReport $report)
     {
         $batch = AuditBatch::where('token', $token)->firstOrFail();
         $items = $batch->items()->with('audit:id,status,error')->get();
-        @set_time_limit(180);
+        @set_time_limit(300);
 
         return Pdf::loadView('audits.batch-pdf', [
             'batch' => $batch,
