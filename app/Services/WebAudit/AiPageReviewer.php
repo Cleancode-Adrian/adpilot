@@ -27,6 +27,11 @@ class AiPageReviewer
     Dostajesz zrzut najważniejszych podstron: tekst widoczny dla klienta (w kolejności z kodu; „#” = nagłówki, „[menu]”, „[stopka]”,
     „[przycisk/link]”, „[opcja]” = pozycja listy wyboru), linki, formularze, opisy obrazków, a także listę uwag, które automat już znalazł.
 
+    Tabele są podane wierszami: „[wiersz tabeli] komórka | komórka | komórka” (pierwszy wiersz to zwykle nagłówki kolumn).
+    Zrzut to tekst wyjęty z kodu, nie obraz strony: może w nim brakować treści dokładanych skryptem, a kolejność bywa inna niż na ekranie.
+    Dlatego NIE zgłaszaj, że czegoś na stronie „brakuje” albo że tabela / lista jest „niekompletna”, jeśli jedynym dowodem jest to,
+    że nie widzisz tego w zrzucie. Nie oceniaj też nazw plików graficznych ani tego, jak zdjęcia wyglądają – nie widzisz ich.
+
     Twoje zadanie – znaleźć to, co widzi i czyta klient:
     - błędy merytoryczne i branżowe (np. pomylone pojęcia fachowe), literówki, błędy odmiany i interpunkcji, zbędne przecinki, angielskie wtręty;
     - sprzeczności między podstronami (ceny, liczby, godziny, obietnice, nazwy usług, nazwa firmy/marki, osoby), ceny odstające od reszty cennika;
@@ -60,11 +65,15 @@ class AiPageReviewer
     summary: 2–3 zdania – ogólny stan strony i najważniejszy wniosek. strengths: 3–5 rzeczy, które działają dobrze (konkretnie).
     TXT;
 
-    public function review(array $inspection, array $autoFindings, ?string $companyName): ?array
+    /** Poziom dokładności (i kosztu) zapytania – ustawiany przy każdym przeglądzie. */
+    protected string $effort = 'high';
+
+    public function review(array $inspection, array $autoFindings, ?string $companyName, ?string $effort = null): ?array
     {
         if (! config('adpilot.ai.api_key')) {
             return null;
         }
+        $this->effort = $effort ?: (string) config('adpilot.ai.audit_effort', 'high');
         $json = $this->request(self::SYSTEM, $this->prompt($inspection, $autoFindings, $companyName));
         if ($json === null) {
             return null;
@@ -103,7 +112,7 @@ class AiPageReviewer
                 maxTokens: 64000,
                 system: $system,
                 messages: [['role' => 'user', 'content' => $prompt]],
-                outputConfig: ['effort' => config('adpilot.ai.audit_effort'), 'format' => ['type' => 'json_schema', 'schema' => self::schema()]],
+                outputConfig: ['effort' => $this->effort, 'format' => ['type' => 'json_schema', 'schema' => self::schema()]],
                 // Przy odmowie modelu API samo ponowi zapytanie na modelu zapasowym
                 fallbacks: 'default',
                 betas: ['server-side-fallback-2026-07-01'],
@@ -164,7 +173,8 @@ class AiPageReviewer
                 'forms' => array_map(fn ($f) => ['submit' => $f['submit'], 'fields' => array_map(fn ($x) => array_filter([
                     'type' => $x['type'], 'label' => $x['label'], 'placeholder' => $x['placeholder'] ?: null, 'options' => $x['options'] ?: null,
                 ]), $f['fields'])], $p['forms']),
-                'images' => array_slice(array_map(fn ($i) => ($i['alt'] ?? '(brak alt)').' | '.urldecode(basename((string) parse_url($i['src'], PHP_URL_PATH))), $p['images']), 0, 40),
+                // same opisy obrazków (bez nazw plików – nie oceniamy ich, a to zbędne tokeny)
+                'image_descriptions' => array_slice(array_values(array_unique(array_filter(array_map(fn ($i) => $i['alt'] ?? '', $p['images'])))), 0, 20),
             ];
         }
 

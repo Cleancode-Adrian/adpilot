@@ -377,7 +377,7 @@ class LegalInspector
             }
             // wykryte w kodzie, a w przeglądarce nic nie wysłało ani nie zapisało
             $tools[$name] = $name === 'Google Tag Manager'
-                ? ['load' => $anySent ? 'uruchamia tagi przed zgodą (sprawdzone w przeglądarce)' : 'tagi czekają na zgodę (sprawdzone w przeglądarce)', 'ok' => ! $anySent, 'confirmed' => true] + $tool
+                ? ['load' => $anySent ? 'uruchamia tagi przed zgodą (sprawdzone w przeglądarce)' : 'tagi czekają na zgodę (sprawdzone w przeglądarce)', 'ok' => ! $anySent, 'confirmed' => true, 'evidence' => null] + $tool
                 : ['load' => 'nie uruchamia się przed zgodą (sprawdzone w przeglądarce)', 'ok' => true, 'confirmed' => true] + $tool;
         }
         // baner widoczny na ekranie, którego nie było widać w kodzie (wstawiany skryptem)
@@ -879,7 +879,7 @@ class LegalInspector
             Sleep::for($delay)->milliseconds();
         }
         try {
-            $r = Http::withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8'])->timeout(15)->connectTimeout(8)->get($url);
+            $r = Http::withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8', 'Accept-Encoding' => 'gzip, deflate'])->timeout(15)->connectTimeout(8)->get($url);
         } catch (Throwable) {
             return ['status' => 0, 'html' => '', 'blocked' => null];
         }

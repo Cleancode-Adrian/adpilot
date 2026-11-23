@@ -92,7 +92,7 @@ class DetailedAuditTest extends TestCase
         $has('Piksel Facebooka');
         $has('Różne wersje plików na podstronach (elementor)');
         $has('ten sam opis „Partner”');
-        $has('Grafiki wyglądające na robocze pliki');
+        $this->assertFalse($titles->keys()->contains(fn ($t) => str_contains($t, 'robocze pliki')), 'nie komentujemy nazw plików graficznych');
         $has('Liczniki mają w kodzie wartość 0');
         $has('Pusty punkt na liście');
         $has('Każde Słowo Wielką Literą');

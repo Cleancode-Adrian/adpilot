@@ -197,7 +197,7 @@ class PageInspector
         if (! $urls) {
             return [];
         }
-        $request = fn ($pending) => $pending->withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8'])
+        $request = fn ($pending) => $pending->withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8', 'Accept-Encoding' => 'gzip, deflate'])
             ->timeout(20)->connectTimeout(10)->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]]);
         // paczkami, z przerwą – kilka zapytań naraz potrafi uruchomić limit zapytań hostingu
         $responses = [];
@@ -365,6 +365,12 @@ class PageInspector
 
         $headings = [];
         foreach ($x->query('//h1|//h2|//h3|//h4|//h5|//h6') as $h) {
+            // nagłówki z okienka wtyczki cookies („Privacy Overview”, „Ustawienia zgód”) nie należą do struktury strony
+            for ($anc = $h->parentNode; $anc instanceof DOMElement; $anc = $anc->parentNode) {
+                if (preg_match('/cookie|cky-|cli-|cmplz|consent|gdpr|moove|iubenda|onetrust|usercentrics/i', $anc->getAttribute('class').' '.$anc->getAttribute('id'))) {
+                    continue 2;
+                }
+            }
             $t = $this->clean($h->textContent);
             $headings[] = ['level' => (int) substr($h->nodeName, 1), 'text' => mb_substr($t, 0, 200), 'empty' => $t === '',
                 'zone' => $this->zone($h), 'in_bold' => $x->query('ancestor::b|ancestor::strong', $h)->length > 0];
@@ -562,12 +568,24 @@ class PageInspector
         }
         $lines = [];
         $seen = [];
-        $nodes = $x->query('//h1|//h2|//h3|//h4|//h5|//h6|//p|//li[not(.//li) and not(.//p)]|//button|//label|//td|//th|//blockquote|//figcaption|//option'
+        $nodes = $x->query('//h1|//h2|//h3|//h4|//h5|//h6|//p[not(ancestor::td) and not(ancestor::th)]|//li[not(.//li) and not(.//p)]|//button|//label|//tr[not(.//tr)]|//blockquote|//figcaption|//option'
             .'|//a[not(ancestor::p) and not(ancestor::li) and not(ancestor::h1) and not(ancestor::h2) and not(ancestor::h3) and not(ancestor::h4)]|//div[text()[normalize-space()]]|//span[contains(@class,"heading-title") or contains(@class,"counter")]');
         foreach ($nodes as $n) {
             /** @var DOMElement $n */
             $zone = $this->zone($n);
             if (! $withChrome && in_array($zone, ['header', 'nav', 'footer'], true)) {
+                continue;
+            }
+            if ($n->nodeName === 'tr') {
+                // Wiersz tabeli w całości – także komórki jednoznakowe („1”, „5”) i powtarzające się; bez tego tabela wygląda na dziurawą
+                $cells = [];
+                foreach ($x->query('./td|./th', $n) as $cell) {
+                    $cells[] = mb_substr($this->clean($cell->textContent), 0, 200);
+                }
+                if (array_filter($cells, fn ($c) => $c !== '')) {
+                    $lines[] = '[wiersz tabeli] '.implode(' | ', $cells);
+                }
+
                 continue;
             }
             $t = $n->nodeName === 'div'
@@ -728,14 +746,6 @@ class PageInspector
                 'Wyczyścić cache (wtyczka cache, CDN, hosting) i wygenerować pliki CSS na nowo (Elementor: Narzędzia → Regeneruj pliki).', basename($file).': '.$desc);
         }
 
-        // Pliki z eksportu Webflow / Canvy itp.
-        $all = array_merge(...array_values(array_map(fn ($p) => $p['images'], $pages)));
-        $webflow = array_filter($all, fn ($i) => preg_match('#/[0-9a-f]{24}_[^/]+$#', (string) parse_url($i['src'], PHP_URL_PATH)));
-        if (count($webflow) >= 3) {
-            $this->add('site', 'code', 'Kod strony', 'drobne', 'Nazwy plików graficznych z eksportu z innego systemu',
-                'Część obrazków ma nazwy w stylu „'.basename((string) parse_url(reset($webflow)['src'], PHP_URL_PATH)).'” – strona była migrowana (np. z Webflow). To nie błąd, ale przy porządkach warto zastąpić najcięższe obrazki lżejszymi wersjami WebP o opisowych nazwach.',
-                'Przy okazji porządków podmienić najcięższe pliki na WebP.');
-        }
     }
 
     // ------------------------------------------------------------------ sprawdzenia: pojedyncza podstrona
@@ -754,18 +764,34 @@ class PageInspector
             $key = rtrim(preg_replace('#^https?://(www\.)?#', '', (string) $l['abs']), '/');
             $groups[$key][mb_strtolower($l['text'])] = $l['text'];
         }
+        // słowa nazwy bez interpunkcji, dat i krótkich łączników; porównywane po początku (odmiana: „select” / „selekcjonowana”)
+        $words = fn (string $s) => array_values(array_unique(array_map(fn ($w) => mb_substr($w, 0, 4),
+            array_filter(preg_split('/[^\p{L}]+/u', mb_strtolower($s)), fn ($w) => mb_strlen($w) >= 3))));
+        $pairs = [];
+        $worst = 0.0;
         foreach ($groups as $target => $texts) {
             if (count($texts) < 2) {
                 continue;
             }
             $t = array_values($texts);
             similar_text(mb_strtolower($t[0]), mb_strtolower($t[1]), $pct);
-            if ($pct < 60) {
-                continue; // zupełnie różne teksty (np. obrazek + tytuł) – pomijamy
+            [$a, $b] = [$words($t[0]), $words($t[1])];
+            // Zupełnie różne teksty (obrazek + tytuł) pomijamy. Tak samo skrót i pełną nazwę tej samej rzeczy
+            // („Sezonowana na mokro” / „Wołowina sezonowana na mokro”, tytuł / tytuł z datą): podejrzane są dopiero
+            // dwie nazwy, z których KAŻDA ma własne słowo – np. „…Poziom Podstawowy” i „…Poziom Rozszerzony”.
+            if ($pct < 60 || ! array_diff($a, $b) || ! array_diff($b, $a)) {
+                continue;
             }
-            $this->add($role, 'page', 'Linki', $pct >= 80 ? 'pilne' : 'srednie', 'Różne pozycje prowadzą pod ten sam adres',
-                'Kafelki/linki „'.$t[0].'” i „'.$t[1].'” prowadzą pod ten sam adres (…/'.basename($target).'/). Jeśli to dwie różne oferty, klient, który kliknie jedną, zobaczy drugą – np. inny poziom albo inną cenę.',
-                'Sprawdzić, dokąd powinien prowadzić każdy kafelek, i poprawić link.', 'https://'.$target, ['https://'.$target], true);
+            $pairs[] = ['a' => $t[0], 'b' => $t[1], 'url' => 'https://'.$target];
+            $worst = max($worst, $pct);
+        }
+        if ($pairs) {
+            $first = $pairs[0];
+            $this->add($role, 'page', 'Linki', $worst >= 80 ? 'pilne' : 'srednie', 'Różne pozycje prowadzą pod ten sam adres',
+                'Kafelki/linki „'.$first['a'].'” i „'.$first['b'].'” prowadzą pod ten sam adres (…/'.basename($first['url']).'/)'.(count($pairs) > 1 ? ' – i jeszcze '.$this->plural(count($pairs) - 1, 'podobna para', 'podobne pary', 'podobnych par') : '')
+                .'. Jeśli to dwie różne oferty, klient, który kliknie jedną, zobaczy drugą – np. inny poziom albo inną cenę.',
+                'Sprawdzić, dokąd powinien prowadzić każdy kafelek, i poprawić link.',
+                implode("\n", array_map(fn ($x) => '„'.$x['a'].'” / „'.$x['b'].'” → '.$x['url'], array_slice($pairs, 0, 5))), array_slice(array_column($pairs, 'url'), 0, 5), true);
         }
 
         // Przyciski, które nic nie robią
@@ -790,13 +816,6 @@ class PageInspector
             $this->add($role, 'page', 'Obrazy i grafiki', 'drobne', 'Wiele obrazków ma ten sam opis „'.$a.'”',
                 $this->plural($repeated[$a], 'obrazek', 'obrazki', 'obrazków').' na tej podstronie ma identyczny opis „'.$a.'” – nie wiadomo, czym się różnią (np. logotypy partnerów bez nazw).',
                 'Opisać każdy obrazek osobno (np. nazwa partnera).');
-        }
-        $draft = array_filter($p['images'], fn ($i) => preg_match('/(zrzut[-_ ]ekranu|screenshot|screen[-_]shot|\/images\.jpe?g|whatsapp[-_]image|img_\d{4}|wpis[-_]na[-_]facebook|[-_]mem[-_.]|placeholder|lorem|template|szablon|canva)/i', (string) parse_url($i['src'], PHP_URL_PATH)));
-        if ($draft) {
-            $names = array_slice(array_unique(array_map(fn ($i) => urldecode(basename((string) parse_url($i['src'], PHP_URL_PATH))), $draft)), 0, 4);
-            $this->add($role, 'page', 'Obrazy i grafiki', 'srednie', 'Grafiki wyglądające na robocze pliki',
-                'Na podstronie są obrazki o nazwach: „'.implode('”, „', $names).'”. Zrzuty ekranu, posty z Facebooka czy pliki z szablonu wyglądają nieprofesjonalnie i bywają nieostre.',
-                'Zastąpić je porządnymi zdjęciami lub logotypami (najlepiej własne zdjęcia zespołu, realizacji).', implode(', ', $names), [$url], true);
         }
 
         // Liczniki z zerami, puste punkty listy
