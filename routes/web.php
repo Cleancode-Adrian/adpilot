@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\AgencyController;
+use App\Http\Controllers\AuditBatchController;
 use App\Http\Controllers\AuditController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CareController;
@@ -36,6 +37,8 @@ Route::get('o/{token}', [QuoteController::class, 'public'])->name('public.quote'
 // Audyt dowolnej strony – raport dla potencjalnego klienta
 Route::get('audyt/{token}', [WebAuditController::class, 'public'])->name('public.web-audit');
 Route::get('audyt/{token}/pdf', [WebAuditController::class, 'pdf'])->name('public.web-audit.pdf');
+Route::get('audyt-zbiorczy/{token}', [AuditBatchController::class, 'public'])->name('public.audit-batch');
+Route::get('audyt-zbiorczy/{token}/csv', [AuditBatchController::class, 'publicCsv'])->name('public.audit-batch.csv');
 // Formularz zgłoszeń dla klienta / agencji (link z tokenem, bez logowania)
 Route::get('zgloszenie/{token}', [RequestFormController::class, 'show'])->name('public.request');
 Route::post('zgloszenie/{token}', [RequestFormController::class, 'submit'])->middleware('throttle:6,10')->name('public.request.submit');
@@ -136,6 +139,18 @@ Route::middleware(['auth'])->group(function () {
     Route::post('audits/{audit}/rerun', [WebAuditController::class, 'rerun'])->middleware('throttle:20,1')->name('audits.rerun');
     Route::post('audits/{audit}/convert', [WebAuditController::class, 'convert'])->name('audits.convert');
     Route::delete('audits/{audit}', [WebAuditController::class, 'destroy'])->name('audits.destroy');
+
+    // Audyt zbiorczy: lista stron (wklejona albo z arkusza Google) → jeden wspólny raport
+    Route::get('audit-batches', [AuditBatchController::class, 'index'])->name('audit-batches.index');
+    Route::post('audit-batches', [AuditBatchController::class, 'store'])->middleware('throttle:20,1')->name('audit-batches.store');
+    Route::get('audit-batches/{batch}', [AuditBatchController::class, 'show'])->name('audit-batches.show');
+    Route::patch('audit-batches/{batch}', [AuditBatchController::class, 'update'])->name('audit-batches.update');
+    Route::patch('audit-batches/{batch}/items/{item}', [AuditBatchController::class, 'updateItem'])->name('audit-batches.items.update');
+    Route::post('audit-batches/{batch}/start', [AuditBatchController::class, 'start'])->name('audit-batches.start');
+    Route::post('audit-batches/{batch}/pause', [AuditBatchController::class, 'pause'])->name('audit-batches.pause');
+    Route::post('audit-batches/{batch}/retry-failed', [AuditBatchController::class, 'retryFailed'])->name('audit-batches.retry-failed');
+    Route::get('audit-batches/{batch}/export', [AuditBatchController::class, 'export'])->name('audit-batches.export');
+    Route::delete('audit-batches/{batch}', [AuditBatchController::class, 'destroy'])->name('audit-batches.destroy');
 
     // Strona: dostępność, SSL, audyt SEO/techniczny
     Route::get('clients/{client}/site', [SiteController::class, 'index'])->name('clients.site');

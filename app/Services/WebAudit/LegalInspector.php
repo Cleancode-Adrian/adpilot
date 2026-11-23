@@ -510,7 +510,7 @@ class LegalInspector
                 }
                 $sig = implode('|', array_map(fn ($x) => $x['type'].':'.$x['name'], $f['fields']));
                 $out[$sig] ??= $f + ['roles' => [], 'urls' => []];
-                $out[$sig]['roles'][] = PageInspector::ROLES[$role] ?? $role;
+                $out[$sig]['roles'][] = $p['label'] ?? PageInspector::ROLES[$role] ?? $role;
                 $out[$sig]['urls'][] = $p['final_url'] ?? $p['url'];
             }
         }

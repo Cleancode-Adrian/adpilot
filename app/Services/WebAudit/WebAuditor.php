@@ -48,7 +48,7 @@ class WebAuditor
         // 1. Najważniejsze podstrony – najpierw, zanim przejście po stronie zbliży się do limitu zapytań hostingu
         $inspection = $inspectionError = null;
         try {
-            $inspection = $this->inspector->inspect($audit->url);
+            $inspection = $this->inspector->inspect($audit->url, (array) ($audit->options['pages'] ?? []));
         } catch (Throwable $e) {
             $inspectionError = $fail($e)['error'];
         }
@@ -93,18 +93,22 @@ class WebAuditor
         }
 
         $scores = array_filter(array_column($areas, 'score'), fn ($s) => $s !== null);
-        if (! $scores) {
+        // Strona główna nie działa i nie udało się pobrać żadnej podstrony – nie wystawiamy oceny stronie błędu
+        $dead = ! $inspection && ! $blocked && (int) ($areas['seo']['summary']['html_pages'] ?? 0) === 0;
+        if (! $scores || $dead) {
             $audit->update(['status' => 'failed', 'areas' => $areas, 'finished_at' => now(),
-                'error' => $blocked
-                    ? 'Serwer strony pokazuje naszemu skanerowi ekran weryfikacji ('.$blocked.') zamiast treści – to zabezpieczenie hostingu przed automatami, nie błąd widoczny dla klientów. Spróbuj ponownie za kilkanaście minut albo poproś o dodanie adresu IP serwera AdPilot do wyjątków zabezpieczenia.'
-                    : ($areas['seo']['error'] ?? $areas['tracking']['error'] ?? 'Strona nie odpowiada.')]);
+                'error' => match (true) {
+                    (bool) $blocked => 'Serwer strony pokazuje naszemu skanerowi ekran weryfikacji ('.$blocked.') zamiast treści – to zabezpieczenie hostingu przed automatami, nie błąd widoczny dla klientów. Spróbuj ponownie za kilkanaście minut albo poproś o dodanie adresu IP serwera AdPilot do wyjątków zabezpieczenia.',
+                    $dead => 'Strona nie działa – '.lcfirst(rtrim((string) $inspectionError, '.')).'. Sprawdź adres albo ponów audyt, gdy strona wróci.',
+                    default => $areas['seo']['error'] ?? $areas['tracking']['error'] ?? 'Strona nie odpowiada.',
+                }]);
 
             return;
         }
 
         // 6. Przegląd treści przez AI – tylko na prawdziwej treści podstron
         $ai = null;
-        if ($inspection) {
+        if ($inspection && ($audit->options['ai'] ?? true)) { // w audycie zbiorczym przegląd AI można wyłączyć
             try {
                 $ai = $this->reviewer->review($inspection, $inspection['findings'], $audit->name);
             } catch (Throwable $e) {

@@ -32,7 +32,7 @@ class AuditReportBuilder
         // --- sekcje
         $sections = [];
         foreach ($pages as $role => $p) {
-            $sections[] = ['key' => $role, 'title' => $p['label'], 'subtitle' => self::PAGE_SUBTITLE[$role] ?? null, 'url' => $p['final_url'] ?? $p['url'],
+            $sections[] = ['key' => $role, 'title' => $p['label'], 'subtitle' => self::PAGE_SUBTITLE[$role] ?? (str_starts_with($role, 'key') ? 'Podstrona wskazana do audytu: treść, linki, obrazy, formularze' : null), 'url' => $p['final_url'] ?? $p['url'],
                 'findings' => array_values(array_filter($findings, fn ($f) => $f['section'] === 'page' && $f['page'] === $role))];
         }
         $sections[] = ['key' => 'site', 'title' => 'Cała strona: spójność i wiarygodność', 'subtitle' => 'Rzeczy, które dotyczą wszystkich podstron', 'url' => null,

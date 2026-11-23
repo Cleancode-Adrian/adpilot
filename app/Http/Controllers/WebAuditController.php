@@ -20,7 +20,7 @@ class WebAuditController extends Controller
     public function index()
     {
         return Inertia::render('audits/index', [
-            'audits' => WebAudit::with('client:id,name')->latest('id')->limit(100)
+            'audits' => WebAudit::with('client:id,name')->whereNull('audit_batch_id')->latest('id')->limit(100) // strony z audytów zbiorczych mają własną zakładkę
                 ->get(['id', 'client_id', 'url', 'name', 'email', 'status', 'score', 'areas', 'created_at'])
                 ->map(fn (WebAudit $a) => [...$a->only(['id', 'url', 'name', 'status', 'score', 'created_at']), 'client' => $a->client?->only(['id', 'name']),
                     'area_scores' => collect($a->areas ?? [])->map(fn ($x) => $x['score'] ?? null)]),
@@ -58,6 +58,7 @@ class WebAuditController extends Controller
         $audit->load('client:id,name');
 
         return Inertia::render('audits/show', [
+            'batch' => $audit->batch?->only(['id', 'name']),
             'audit' => $audit->makeHidden('report'),
             'report' => $this->report($audit),
             'areas' => WebAuditor::AREAS,
@@ -68,7 +69,9 @@ class WebAuditController extends Controller
 
     public function rerun(Request $request, WebAudit $audit)
     {
-        $copy = WebAudit::create($audit->only(['url', 'name', 'email', 'client_id']) + ['token' => Str::random(40), 'created_by' => $request->user()->id]);
+        $copy = WebAudit::create($audit->only(['url', 'name', 'email', 'client_id', 'audit_batch_id', 'options', 'followup_off']) + ['token' => Str::random(40), 'created_by' => $request->user()->id]);
+        // audyt z listy zbiorczej: nowy wynik zastępuje poprzedni w zestawieniu
+        $audit->batchItem?->update(['web_audit_id' => $copy->id, 'summary' => null]);
         RunWebAuditJob::dispatch($copy);
 
         return redirect()->route('audits.show', $copy)->with('success', 'Uruchomiono ponowny audyt.');
@@ -91,9 +94,11 @@ class WebAuditController extends Controller
 
     public function destroy(WebAudit $audit)
     {
+        $batch = $audit->audit_batch_id;
+        $audit->batchItem?->update(['web_audit_id' => null, 'summary' => null]);
         $audit->delete();
 
-        return redirect()->route('audits.index')->with('success', 'Usunięto audyt.');
+        return ($batch ? redirect()->route('audit-batches.show', $batch) : redirect()->route('audits.index'))->with('success', 'Usunięto audyt.');
     }
 
     // ------------------------------------------------------------------ raport dla klienta

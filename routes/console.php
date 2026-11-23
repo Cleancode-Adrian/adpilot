@@ -9,6 +9,7 @@ use App\Jobs\SyncClientJob;
 use App\Jobs\SyncSearchConsoleJob;
 use App\Jobs\UptimeCheckJob;
 use App\Mail\DailyDigestMail;
+use App\Models\AuditBatch;
 use App\Models\CareTask;
 use App\Models\Client;
 use App\Models\Recommendation;
@@ -175,6 +176,8 @@ Schedule::call(fn () => WpSite::where('status', 'connected')->whereHas('client',
 Schedule::call(fn () => app(WpMonitor::class)->checkOffline())->hourly()->name('adpilot-wp-offline');
 // Dostępność stron co 5 min, certyfikaty SSL raz dziennie, audyt stron z opieką raz w miesiącu
 Schedule::job(new UptimeCheckJob)->everyFiveMinutes()->name('adpilot-uptime');
+// Audyt zbiorczy: gdyby łańcuch „po audycie uruchom następną stronę” się zerwał (restart serwera, przekroczony czas) – podejmij listę
+Schedule::call(fn () => AuditBatch::where('status', 'running')->get()->each->advance())->everyFiveMinutes()->name('adpilot-audit-batches');
 Schedule::call(fn () => SiteMonitor::where('enabled', true)->whereHas('client', fn ($q) => $q->active())->get()
     ->each(fn ($m) => app(UptimeMonitor::class)->checkSsl($m)))->dailyAt('07:10')->name('adpilot-ssl');
 Schedule::call(fn () => Client::active()->where('is_demo', false)->where('has_care', true)->get()

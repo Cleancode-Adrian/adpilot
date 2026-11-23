@@ -89,12 +89,14 @@ export default function AuditShow({
     public_url,
     pdf_url,
     report,
+    batch,
 }: {
     audit: Audit;
     areas: Record<string, string>;
     public_url: string;
     pdf_url: string;
     report: Report | null;
+    batch?: { id: number; name: string } | null;
 }) {
     const running = audit.status === 'pending' || audit.status === 'running';
     useEffect(() => {
@@ -109,7 +111,7 @@ export default function AuditShow({
     return (
         <AppLayout
             breadcrumbs={[
-                { title: 'Audyt dowolnej strony', href: '/audits' },
+                batch ? { title: batch.name, href: `/audit-batches/${batch.id}` } : { title: 'Audyt dowolnej strony', href: '/audits' },
                 { title: host, href: `/audits/${audit.id}` },
             ]}
         >

@@ -10,6 +10,7 @@ import {
     FileSignature,
     Handshake,
     Inbox,
+    Layers,
     ListChecks,
     Palette,
     ScanSearch,
@@ -33,6 +34,7 @@ export function AppSidebar() {
     ];
     const sales: NavItem[] = [
         { title: 'Audyt strony', url: '/audits', icon: ScanSearch },
+        { title: 'Audyt zbiorczy', url: '/audit-batches', icon: Layers },
         ...(admin ? [{ title: 'Oferty', url: '/quotes', icon: FileSignature }] : []),
     ];
     const finance: NavItem[] = admin ? [{ title: 'Rozliczenia', url: '/billing', icon: Wallet }] : [];

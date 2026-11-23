@@ -28,8 +28,17 @@ class PageInspector
 {
     private const UA = 'Mozilla/5.0 (compatible; CC-SiteAudit/1.0)';
 
+    /** Ile wskazanych podstron (audyt zbiorczy: „najważniejsze podstrony” z listy) sprawdzamy na jednej stronie. */
+    public const KEY_PAGES = 6;
+
     public const ROLES = [
         'home' => 'Strona główna',
+        'key1' => 'Wskazana podstrona 1',
+        'key2' => 'Wskazana podstrona 2',
+        'key3' => 'Wskazana podstrona 3',
+        'key4' => 'Wskazana podstrona 4',
+        'key5' => 'Wskazana podstrona 5',
+        'key6' => 'Wskazana podstrona 6',
         'offer' => 'Oferta i cennik',
         'detail' => 'Przykładowa strona usługi / oferty',
         'contact' => 'Kontakt',
@@ -65,9 +74,10 @@ class PageInspector
     // ------------------------------------------------------------------ wejście
 
     /**
+     * @param  list<string>  $keyPages  wskazane najważniejsze podstrony – sprawdzane zamiast samodzielnie dobranej oferty / usługi / „o firmie”
      * @return array{pages: array<string, array>, findings: list<array>, facts: array}
      */
-    public function inspect(string $url): array
+    public function inspect(string $url, array $keyPages = []): array
     {
         $this->findings = [];
         $root = rtrim($url, '/').'/';
@@ -77,7 +87,7 @@ class PageInspector
             throw new SiteBlockedException($home['blocked']);
         }
         if (! $home || ! $home['ok']) {
-            throw new \RuntimeException('Nie udało się pobrać strony głównej: '.($home['error'] ?? $root));
+            throw new \RuntimeException('Nie udało się pobrać strony głównej ('.$root.'): '.($home['error'] ?? (($home['status'] ?? 0) >= 400 ? 'błąd HTTP '.$home['status'] : 'brak odpowiedzi lub to nie jest strona HTML')));
         }
         $finalHost = strtolower((string) parse_url($home['final_url'], PHP_URL_HOST));
         $this->siteHost = $this->bare($finalHost);
@@ -89,6 +99,18 @@ class PageInspector
         // Kontakt, oferta, o firmie – po tekście linku i adresie (najpierw linki z menu i nagłówka)
         $candidates = $this->roleCandidates($pages['home']['links']);
         $toFetch = array_filter($candidates);
+        $keys = [];
+        foreach ($keyPages as $u) {
+            $u = trim((string) $u);
+            if ($u !== '' && ! $this->sameUrl($u, $root) && ! $this->sameUrl($u, $home['final_url']) && ! array_filter($keys, fn ($k) => $this->sameUrl($k, $u)) && count($keys) < self::KEY_PAGES) {
+                $keys['key'.(count($keys) + 1)] = $u;
+            }
+        }
+        if ($keys) {
+            // Wskazane podstrony + kontakt (formularz i dane firmy), jeśli nie ma go wśród wskazanych
+            $contact = $candidates['contact'] ?? null;
+            $toFetch = $keys + ($contact && ! array_filter($keys, fn ($k) => $this->sameUrl($k, $contact)) ? ['contact' => $contact] : []);
+        }
         foreach ($this->fetch(array_values($toFetch)) as $u => $res) {
             $role = array_search($u, $toFetch, true);
             if ($role && $res) {
@@ -97,7 +119,7 @@ class PageInspector
         }
 
         // Przykładowa karta oferty / usługi – z oferty (albo strony głównej)
-        $detail = $this->detailCandidate($pages['offer'] ?? null, $pages['home'], array_values(array_map(fn ($p) => $p['final_url'], $pages)));
+        $detail = $keys ? null : $this->detailCandidate($pages['offer'] ?? null, $pages['home'], array_values(array_map(fn ($p) => $p['final_url'], $pages)));
         if ($detail) {
             $res = $this->fetch([$detail])[$detail] ?? null;
             if ($res) {
@@ -110,9 +132,10 @@ class PageInspector
 
         foreach ($pages as $role => $p) {
             if (! $p['ok'] && empty($p['blocked'])) {
-                $this->add($role, 'page', 'Dostępność', 'pilne', 'Podstrona „'.self::ROLES[$role].'” nie działa',
-                    'Link z menu prowadzi pod adres, który zwraca błąd '.($p['status'] ?: 'połączenia').'. Klient, który tam kliknie, nie zobaczy treści.',
-                    'Przywróć podstronę albo popraw link w menu.', $p['url'], [$p['url']]);
+                $key = str_starts_with($role, 'key');
+                $this->add($role, 'page', 'Dostępność', 'pilne', $key ? 'Wskazana podstrona nie działa' : 'Podstrona „'.$p['label'].'” nie działa',
+                    ($key ? 'Adres wskazany do audytu' : 'Link z menu prowadzi pod adres, który').' zwraca błąd '.($p['status'] ?: 'połączenia').'. Klient, który tam trafi, nie zobaczy treści.',
+                    $key ? 'Przywróć podstronę albo ustaw przekierowanie na jej aktualny adres.' : 'Przywróć podstronę albo popraw link w menu.', $p['url'], [$p['url']]);
             }
         }
         $ok = array_filter($pages, fn ($p) => $p['ok']);
@@ -176,11 +199,18 @@ class PageInspector
         }
         $request = fn ($pending) => $pending->withUserAgent(self::UA)->withHeaders(['Accept-Language' => 'pl-PL,pl;q=0.9,en;q=0.8'])
             ->timeout(20)->connectTimeout(10)->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]]);
-        $responses = Http::pool(function (Pool $pool) use ($urls, $request) {
-            foreach ($urls as $u) {
-                $request($pool->as($u))->get($u);
+        // paczkami, z przerwą – kilka zapytań naraz potrafi uruchomić limit zapytań hostingu
+        $responses = [];
+        foreach (array_chunk($urls, max(1, (int) config('adpilot.site_audit.concurrency', 3))) as $i => $chunk) {
+            if ($i > 0 && ($delay = (int) config('adpilot.site_audit.delay_ms', 0)) > 0) {
+                Sleep::for($delay)->milliseconds();
             }
-        });
+            $responses += Http::pool(function (Pool $pool) use ($chunk, $request) {
+                foreach ($chunk as $u) {
+                    $request($pool->as($u))->get($u);
+                }
+            });
+        }
         foreach ($urls as $u) {
             $r = $responses[$u] ?? null;
             if (! $r instanceof Response || ! BotWall::detectResponse($r)) {
@@ -287,7 +317,7 @@ class PageInspector
         $base = ['role' => $role, 'label' => self::ROLES[$role], 'url' => $res['url'], 'final_url' => $res['final_url'], 'status' => $res['status'], 'ok' => $res['ok'], 'blocked' => $res['blocked'] ?? null,
             'cookies' => $res['cookies'] ?? []];
         if (! $res['ok']) {
-            return $base + ['title' => null, 'links' => [], 'emails' => [], 'raw' => ''];
+            return ['label' => str_starts_with($role, 'key') ? $this->keyLabel($res['url'], null) : $base['label']] + $base + ['title' => null, 'links' => [], 'emails' => [], 'raw' => ''];
         }
         $html = $res['body'];
         $dom = new DOMDocument;
@@ -431,8 +461,13 @@ class PageInspector
 
         $text = $this->visibleText($dom, $role === 'home');
 
+        $title = $this->clean((string) ($x->query('//title')->item(0)?->textContent ?? ''));
+        if (str_starts_with($role, 'key')) {
+            $base['label'] = $this->keyLabel($res['final_url'], $title);
+        }
+
         return $base + [
-            'title' => $this->clean((string) ($x->query('//title')->item(0)?->textContent ?? '')),
+            'title' => $title,
             'description' => $meta('name', 'description'),
             'og_site_name' => $meta('property', 'og:site_name'),
             'og_title' => $meta('property', 'og:title'),
@@ -678,7 +713,7 @@ class PageInspector
                 foreach ($m as $hit) {
                     if (preg_match('/^\d+\.\d+(\.\d+)?$/', $hit[3])) {
                         $key = preg_replace('#^https?://[^/]+#', '', $hit[1]);
-                        $versions[$key][$hit[3]][] = self::ROLES[$role];
+                        $versions[$key][$hit[3]][] = $p['label'];
                     }
                 }
             }
@@ -1149,6 +1184,18 @@ class PageInspector
     }
 
     // ------------------------------------------------------------------ pomocnicze
+
+    /** Nazwa wskazanej podstrony w raporcie: początek tytułu strony (bez nazwy firmy po myślniku), a gdy go brak – końcówka adresu. */
+    private function keyLabel(string $url, ?string $title): string
+    {
+        $name = trim((string) preg_split('/\s+[–—|»·-]\s+/u', (string) $title)[0]);
+        if (mb_strlen($name) < 4) {
+            $path = trim(rawurldecode((string) parse_url($url, PHP_URL_PATH)), '/');
+            $name = trim(str_replace(['-', '_', ','], ' ', (string) preg_replace('/\.(html?|php|aspx?)$/i', '', basename($path) ?: $path)));
+        }
+
+        return $name !== '' ? mb_strimwidth($name, 0, 64, '…') : $url;
+    }
 
     private function add(string $page, string $section, string $group, string $sev, string $title, string $text, ?string $fix = null, ?string $evidence = null, array $urls = [], bool $verify = false): void
     {
