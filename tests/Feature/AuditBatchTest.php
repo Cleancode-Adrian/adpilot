@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ClientAlertMail;
 use App\Models\AuditBatch;
 use App\Models\AuditBatchItem;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Services\WebAudit\SecurityScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -237,7 +239,28 @@ class AuditBatchTest extends TestCase
         $this->assertSame('done', $alfa->summary['status']);
         $this->assertSame($batch->id, $alfa->audit->audit_batch_id);
 
-        // 7. usunięcie listy usuwa też audyty jej stron
+        // 7. skrócony PDF całej listy
+        $this->get("/audyt-zbiorczy/{$token}/pdf")->assertOk()->assertHeader('Content-Type', 'application/pdf');
+
+        // 8. ponowny audyt całej listy = nowy audyt zbiorczy z porównaniem; e-mail po zakończeniu
+        $this->gammaUp = false; // gamma znów nie działa – nie wchodzi do porównania
+        Mail::fake();
+        $this->post("/audit-batches/{$batch->id}/rerun")->assertRedirect();
+        $again = AuditBatch::latest('id')->first();
+        $this->assertSame($batch->id, $again->previous_id);
+        $this->assertSame('done', $again->status);
+        $this->assertStringEndsWith('– ponownie '.now()->format('d.m.Y'), $again->name);
+        $this->assertSame(4, $again->items()->count());
+        $this->assertNull($again->items()->where('label', 'delta-test.pl')->first()->web_audit_id, 'odznaczone strony zostają odznaczone');
+        Mail::assertSent(ClientAlertMail::class, fn (ClientAlertMail $m) => $m->hasTo($user->email) && str_contains($m->title, 'Audyt zbiorczy gotowy') && str_contains(implode(' ', $m->lines), 'Nieudane: 1'));
+        $this->assertNotNull($again->notified_at);
+        $this->get("/audit-batches/{$again->id}")->assertInertia(fn (Assert $p) => $p
+            ->where('comparison.previous.id', $batch->id)->where('comparison.sites_compared', 2)
+            ->where('comparison.fixed_total', 0)->where('comparison.new_total', 0)
+            ->where('comparison.sites', fn ($s) => collect($s)->get('alfa-test.pl')['before'] === $alfa->summary['score']));
+        $this->delete("/audit-batches/{$again->id}")->assertRedirect('/audit-batches');
+
+        // 9. usunięcie listy usuwa też audyty jej stron
         $this->delete("/audit-batches/{$batch->id}")->assertRedirect('/audit-batches');
         $this->assertSame(0, AuditBatch::count());
         $this->assertSame(0, AuditBatchItem::count());

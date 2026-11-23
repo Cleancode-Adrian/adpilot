@@ -110,6 +110,64 @@ class BatchReport
         return array_slice($out, 0, $limit);
     }
 
+    /**
+     * Porównanie z poprzednim audytem tej samej listy: zmiana ocen, problemy, które zniknęły, i te, które doszły.
+     * Strony łączone po nazwie z listy; uwagi – po kluczu problemu (bez uwag z przeglądu AI, które za każdym razem brzmią inaczej).
+     */
+    public function compare(Collection $items, AuditBatch $previous): array
+    {
+        $before = $previous->items()->get()->keyBy('label');
+        $keys = fn (?AuditBatchItem $i) => collect($i?->summary['findings'] ?? [])->reject(fn ($f) => ! empty($f['ai']) || $f['k'] === '')->keyBy('k');
+        $sites = [];
+        $fixed = $new = [];
+        foreach ($items as $item) {
+            $old = $before[$item->label] ?? null;
+            if (($item->summary['status'] ?? null) !== 'done' || ($old?->summary['status'] ?? null) !== 'done') {
+                continue;
+            }
+            $now = $keys($item);
+            $was = $keys($old);
+            $gone = $was->diffKeys($now);
+            $came = $now->diffKeys($was);
+            foreach ($gone as $k => $f) {
+                $fixed[$k] ??= ['title' => $this->generalTitle($f['t']), 'sev' => $f['s'], 'sites' => []];
+                $fixed[$k]['sites'][] = $item->label;
+            }
+            foreach ($came as $k => $f) {
+                $new[$k] ??= ['title' => $this->generalTitle($f['t']), 'sev' => $f['s'], 'sites' => []];
+                $new[$k]['sites'][] = $item->label;
+            }
+            $sites[$item->label] = [
+                'before' => $old->summary['score'], 'after' => $item->summary['score'],
+                'pilne_before' => (int) ($old->summary['counts']['pilne'] ?? 0), 'pilne_after' => (int) ($item->summary['counts']['pilne'] ?? 0),
+                'fixed' => $gone->count(), 'new' => $came->count(),
+            ];
+        }
+        $rank = function (array $groups) {
+            $groups = array_values(array_map(fn ($g) => $g + ['count' => count($g['sites'])], $groups));
+            usort($groups, fn ($a, $b) => [self::SEV_ORDER[$a['sev']], -$a['count']] <=> [self::SEV_ORDER[$b['sev']], -$b['count']]);
+
+            return array_slice($groups, 0, 40);
+        };
+        $s = collect($sites);
+
+        return [
+            'previous' => $previous->only(['id', 'name', 'finished_at']),
+            'sites_compared' => $s->count(),
+            'avg_before' => $s->count() ? (int) round($s->avg('before')) : null,
+            'avg_after' => $s->count() ? (int) round($s->avg('after')) : null,
+            'pilne_before' => (int) $s->sum('pilne_before'),
+            'pilne_after' => (int) $s->sum('pilne_after'),
+            'improved' => $s->filter(fn ($x) => $x['after'] > $x['before'])->count(),
+            'worse' => $s->filter(fn ($x) => $x['after'] < $x['before'])->count(),
+            'fixed_total' => (int) $s->sum('fixed'),
+            'new_total' => (int) $s->sum('new'),
+            'fixed' => $rank($fixed),
+            'new' => $rank($new),
+            'sites' => $sites,
+        ];
+    }
+
     /** Tytuł problemu bez szczegółów jednej strony: „Ciężkie zdjęcia (14 plików powyżej 250 KB)” → „Ciężkie zdjęcia”. */
     private function generalTitle(string $title): string
     {

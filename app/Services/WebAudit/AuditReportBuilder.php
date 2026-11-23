@@ -26,8 +26,8 @@ class AuditReportBuilder
 
     public function build(WebAudit $audit, array $areas, ?array $inspection, ?array $ai, ?string $inspectionError = null, ?string $blocked = null): array
     {
-        $findings = array_merge($inspection['findings'] ?? [], $ai['findings'] ?? [], $this->fromAreas($areas, $inspection));
         $pages = $inspection['pages'] ?? [];
+        $findings = $this->mergeRepeated(array_merge($inspection['findings'] ?? [], $ai['findings'] ?? [], $this->fromAreas($areas, $inspection)), $pages);
 
         // --- sekcje
         $sections = [];
@@ -232,6 +232,51 @@ class AuditReportBuilder
             $add('SEO techniczne', 'drobne', 'Pozostałe drobne uwagi techniczne SEO',
                 implode('; ', array_map(fn ($i) => $i['title'].($i['scope'] === 'pages' ? ' ('.$i['count'].')' : ''), array_slice($rest, 6))).'.', 'Do uporządkowania przy okazji innych prac.');
         }
+
+        return $out;
+    }
+
+    /**
+     * Ta sama uwaga techniczna z kilku podstron (np. „Linki bez nazwy” na stronie głównej, w ofercie i kontakcie) → jedna uwaga
+     * z listą podstron. Dotyczy części wspólnych (kod, wydajność, telefon, prawo); w sekcjach podstron uwagi zostają osobno.
+     */
+    private function mergeRepeated(array $findings, array $pages): array
+    {
+        $out = [];
+        $index = [];
+        foreach ($findings as $f) {
+            if ($f['section'] === 'page' || ($f['source'] ?? '') === 'ai') {
+                $out[] = $f;
+
+                continue;
+            }
+            $key = $f['section'].'|'.$f['group'].'|'.$f['title'];
+            if (! isset($index[$key])) {
+                $index[$key] = count($out);
+                $out[] = $f + ['_pages' => [$f['page']]];
+
+                continue;
+            }
+            $m = &$out[$index[$key]];
+            $m['_pages'][] = $f['page'];
+            $m['sev'] = self::SEV_ORDER[$f['sev']] < self::SEV_ORDER[$m['sev']] ? $f['sev'] : $m['sev'];
+            $m['urls'] = array_slice(array_values(array_unique(array_merge($m['urls'], $f['urls']))), 0, 8);
+            $m['verify'] = $m['verify'] || $f['verify'];
+            if ($f['evidence'] && ! str_contains((string) $m['evidence'], (string) $f['evidence'])) {
+                $m['evidence'] = mb_strimwidth(trim($m['evidence']."\n".$f['evidence']), 0, 900, '…');
+            }
+            unset($m);
+        }
+        foreach ($out as &$f) {
+            $roles = array_values(array_unique($f['_pages'] ?? []));
+            unset($f['_pages']);
+            if (count($roles) > 1) {
+                $labels = array_map(fn ($r) => $pages[$r]['label'] ?? 'cała strona', $roles);
+                $f['text'] = rtrim($f['text']).' Dotyczy podstron: '.implode(', ', $labels).' (opis na przykładzie pierwszej).';
+                $f['page'] = 'site';
+            }
+        }
+        unset($f);
 
         return $out;
     }

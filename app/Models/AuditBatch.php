@@ -3,7 +3,11 @@
 namespace App\Models;
 
 use App\Jobs\RunWebAuditJob;
+use App\Mail\ClientAlertMail;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,11 +21,22 @@ use Illuminate\Support\Str;
  */
 class AuditBatch extends Model
 {
-    protected $fillable = ['name', 'status', 'source', 'options', 'token', 'created_by', 'started_at', 'finished_at'];
+    protected $fillable = ['previous_id', 'name', 'status', 'source', 'options', 'token', 'created_by', 'started_at', 'finished_at', 'notified_at'];
 
     protected $hidden = ['token'];
 
-    protected $casts = ['options' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime'];
+    protected $casts = ['options' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime', 'notified_at' => 'datetime'];
+
+    /** Poprzedni audyt tej samej listy – do porównania „przed / po”. */
+    public function previous(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'previous_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     public function items(): HasMany
     {
@@ -89,6 +104,30 @@ class AuditBatch extends Model
             RunWebAuditJob::dispatch($audit);
         }
         $this->refresh();
+        $this->notifyFinished();
+    }
+
+    /** E-mail do osoby, która uruchomiła listę – audyt kilkudziesięciu stron trwa godzinami, nie trzeba zaglądać do panelu. */
+    private function notifyFinished(): void
+    {
+        if ($this->status !== 'done' || $this->notified_at || ! ($email = $this->creator?->email)) {
+            return;
+        }
+        $this->update(['notified_at' => now()]);
+        $p = $this->progress(false);
+        try {
+            Mail::to($email)->send(new ClientAlertMail(
+                'Audyt zbiorczy gotowy: '.$this->name,
+                array_values(array_filter([
+                    'Sprawdzone strony: '.$p['done'].' z '.$p['total'].'.',
+                    $p['failed'] ? 'Nieudane: '.$p['failed'].' – w panelu możesz je ponowić jednym kliknięciem.' : null,
+                    'W panelu: zestawienie stron, najczęstsze problemy, arkusz wszystkich uwag i raport zbiorczy.',
+                ])),
+                route('audit-batches.show', $this),
+            ));
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     /** Ile sekund zwykle trwa audyt jednej strony – z ostatnich wykonanych (mediana), a bez historii: ostrożne założenie. */

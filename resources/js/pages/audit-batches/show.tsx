@@ -8,7 +8,7 @@ import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { scoreTone } from '@/pages/audits/index';
 import { Head, Link, router } from '@inertiajs/react';
-import { ChevronRight, Download, ExternalLink, Pause, Play, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronRight, Download, ExternalLink, FileDown, Pause, Play, RefreshCw, Repeat, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { BATCH_STATUS, duration, type Progress } from './index';
 
@@ -49,6 +49,52 @@ interface Common {
     section: string;
     count: number;
     sites: string[];
+}
+
+interface Change {
+    title: string;
+    sev: Sev;
+    count: number;
+    sites: string[];
+}
+
+interface Comparison {
+    previous: { id: number; name: string; finished_at: string | null };
+    sites_compared: number;
+    avg_before: number | null;
+    avg_after: number | null;
+    pilne_before: number;
+    pilne_after: number;
+    improved: number;
+    worse: number;
+    fixed_total: number;
+    new_total: number;
+    fixed: Change[];
+    new: Change[];
+    sites: Record<string, { before: number; after: number; fixed: number; new: number }>;
+}
+
+function Changes({ title, items, cls }: { title: string; items: Change[]; cls: string }) {
+    return (
+        <div>
+            <div className={cn('mb-1 text-sm font-medium', cls)}>{title}</div>
+            {items.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Brak.</p>
+            ) : (
+                <ul className="grid gap-0.5 text-sm">
+                    {items.slice(0, 15).map((c) => (
+                        <li key={c.title} className="flex justify-between gap-2 border-t py-0.5" title={c.sites.join(', ')}>
+                            <span className="min-w-0">
+                                <span className={cn('mr-1 text-[10px] font-bold uppercase', SEV[c.sev].text)}>{SEV[c.sev].label}</span>
+                                {c.title}
+                            </span>
+                            <span className="text-muted-foreground shrink-0 tabular-nums">{c.count} str.</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
 }
 
 interface Stats {
@@ -95,6 +141,8 @@ export default function AuditBatchShow({
     has_ai,
     public_url,
     csv_url,
+    pdf_url,
+    comparison,
 }: {
     batch: Batch;
     progress: Progress;
@@ -105,6 +153,8 @@ export default function AuditBatchShow({
     has_ai: boolean;
     public_url: string;
     csv_url: string;
+    pdf_url: string;
+    comparison: Comparison | null;
 }) {
     const draft = batch.status === 'draft';
     const active = batch.status === 'running' || progress.running > 0;
@@ -178,7 +228,26 @@ export default function AuditBatchShow({
                                         <ExternalLink className="size-4" /> Raport zbiorczy
                                     </a>
                                 </Button>
+                                <Button variant="outline" asChild>
+                                    <a href={pdf_url} title="Skrócony PDF: ranking, najczęstsze problemy i pilne sprawy każdej strony">
+                                        <FileDown className="size-4" /> PDF (skrót)
+                                    </a>
+                                </Button>
                                 <CopyLink url={public_url} label="Kopiuj link do raportu" />
+                                {!active && (
+                                    <Button
+                                        variant="outline"
+                                        disabled={busy}
+                                        title="Nowy audyt tej samej listy – ten zostaje do porównania"
+                                        onClick={() =>
+                                            confirm(
+                                                'Uruchomić ponowny audyt całej listy? Ten wynik zostanie – po zakończeniu zobaczysz porównanie.',
+                                            ) && post(`/audit-batches/${batch.id}/rerun`)
+                                        }
+                                    >
+                                        <Repeat className="size-4" /> Audytuj ponownie
+                                    </Button>
+                                )}
                             </>
                         )}
                         <Button
@@ -338,6 +407,33 @@ export default function AuditBatchShow({
                     </>
                 )}
 
+                {comparison && comparison.sites_compared > 0 && (
+                    <Section
+                        title="Porównanie z poprzednim audytem"
+                        description={`${comparison.previous.name}${comparison.previous.finished_at ? ` (${dateTime(comparison.previous.finished_at)})` : ''} · porównano ${comparison.sites_compared} stron. Bez uwag z przeglądu AI – te za każdym razem brzmią inaczej.`}
+                        actions={
+                            <Link href={`/audit-batches/${comparison.previous.id}`} className="text-sm underline">
+                                Poprzedni audyt
+                            </Link>
+                        }
+                    >
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <Tile
+                                label="Średnia ocena"
+                                value={`${comparison.avg_before} → ${comparison.avg_after}`}
+                                cls={scoreTone(comparison.avg_after).cls}
+                            />
+                            <Tile label="Sprawy pilne" value={`${comparison.pilne_before} → ${comparison.pilne_after}`} cls={SEV.pilne.text} />
+                            <Tile label="Strony lepiej / gorzej" value={`${comparison.improved} / ${comparison.worse}`} />
+                            <Tile label="Problemy: zniknęło / doszło" value={`${comparison.fixed_total} / ${comparison.new_total}`} />
+                        </div>
+                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                            <Changes title="Zniknęło (naprawione)" items={comparison.fixed} cls="text-[#0a7d0a] dark:text-[#4ccc4c]" />
+                            <Changes title="Doszło (nowe)" items={comparison.new} cls="text-[#b42f2f] dark:text-[#f08080]" />
+                        </div>
+                    </Section>
+                )}
+
                 {!draft && common.length > 0 && (
                     <Section
                         title="Najczęstsze problemy"
@@ -493,9 +589,27 @@ export default function AuditBatchShow({
                                                 <>
                                                     <td className="py-2 whitespace-nowrap">
                                                         {i.state === 'done' ? (
-                                                            <span className={cn('font-semibold tabular-nums', scoreTone(i.score).cls)}>
-                                                                {i.score}/100
-                                                            </span>
+                                                            <>
+                                                                <span className={cn('font-semibold tabular-nums', scoreTone(i.score).cls)}>
+                                                                    {i.score}/100
+                                                                </span>
+                                                                {comparison?.sites[i.label] &&
+                                                                    i.score !== null &&
+                                                                    i.score !== comparison.sites[i.label].before && (
+                                                                        <span
+                                                                            className={cn(
+                                                                                'ml-1 text-xs tabular-nums',
+                                                                                i.score > comparison.sites[i.label].before
+                                                                                    ? 'text-[#0a7d0a] dark:text-[#4ccc4c]'
+                                                                                    : 'text-[#b42f2f] dark:text-[#f08080]',
+                                                                            )}
+                                                                            title={`Poprzednio ${comparison.sites[i.label].before}/100`}
+                                                                        >
+                                                                            {i.score > comparison.sites[i.label].before ? '+' : ''}
+                                                                            {i.score - comparison.sites[i.label].before}
+                                                                        </span>
+                                                                    )}
+                                                            </>
                                                         ) : i.state === 'running' || i.state === 'pending' ? (
                                                             <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
                                                                 <RefreshCw className={cn('size-3', i.state === 'running' && 'animate-spin')} />{' '}

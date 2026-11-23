@@ -81,6 +81,7 @@
             <td style="text-align: right; vertical-align: middle" class="muted">
                 <span class="noprint">
                     <a class="btn ghost" href="{{ $csvUrl }}">Arkusz wszystkich uwag (Excel)</a>
+                    <a class="btn ghost" href="{{ $pdfUrl }}">PDF (skrót)</a>
                     <a class="btn" href="#" id="print">Drukuj / zapisz PDF</a><br>
                 </span>
                 {{ $date }}

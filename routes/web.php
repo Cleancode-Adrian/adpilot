@@ -39,6 +39,7 @@ Route::get('audyt/{token}', [WebAuditController::class, 'public'])->name('public
 Route::get('audyt/{token}/pdf', [WebAuditController::class, 'pdf'])->name('public.web-audit.pdf');
 Route::get('audyt-zbiorczy/{token}', [AuditBatchController::class, 'public'])->name('public.audit-batch');
 Route::get('audyt-zbiorczy/{token}/csv', [AuditBatchController::class, 'publicCsv'])->name('public.audit-batch.csv');
+Route::get('audyt-zbiorczy/{token}/pdf', [AuditBatchController::class, 'publicPdf'])->middleware('throttle:10,1')->name('public.audit-batch.pdf');
 // Formularz zgłoszeń dla klienta / agencji (link z tokenem, bez logowania)
 Route::get('zgloszenie/{token}', [RequestFormController::class, 'show'])->name('public.request');
 Route::post('zgloszenie/{token}', [RequestFormController::class, 'submit'])->middleware('throttle:6,10')->name('public.request.submit');
@@ -149,6 +150,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('audit-batches/{batch}/start', [AuditBatchController::class, 'start'])->name('audit-batches.start');
     Route::post('audit-batches/{batch}/pause', [AuditBatchController::class, 'pause'])->name('audit-batches.pause');
     Route::post('audit-batches/{batch}/retry-failed', [AuditBatchController::class, 'retryFailed'])->name('audit-batches.retry-failed');
+    Route::post('audit-batches/{batch}/rerun', [AuditBatchController::class, 'rerun'])->middleware('throttle:6,1')->name('audit-batches.rerun');
     Route::get('audit-batches/{batch}/export', [AuditBatchController::class, 'export'])->name('audit-batches.export');
     Route::delete('audit-batches/{batch}', [AuditBatchController::class, 'destroy'])->name('audit-batches.destroy');
 

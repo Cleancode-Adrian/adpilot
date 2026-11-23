@@ -9,6 +9,7 @@ use App\Models\WebAudit;
 use App\Services\WebAudit\BatchListParser;
 use App\Services\WebAudit\BatchReport;
 use App\Services\WebAudit\WebAuditor;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -64,8 +65,10 @@ class AuditBatchController extends Controller
             'items' => $report->items($items),
             'stats' => $report->stats($items),
             'common' => $report->common($items),
+            'comparison' => $batch->previous ? $report->compare($items, $batch->previous) : null,
             'areas' => WebAuditor::AREAS,
             'has_ai' => (bool) config('adpilot.ai.api_key'),
+            'pdf_url' => route('public.audit-batch.pdf', $batch->token),
             'public_url' => route('public.audit-batch', $batch->token),
             'csv_url' => route('audit-batches.export', $batch),
         ]);
@@ -144,6 +147,30 @@ class AuditBatchController extends Controller
         return back()->with('success', 'Ponawiam nieudane audyty: '.$failed->count().'.');
     }
 
+    /**
+     * Ponowny audyt całej listy jako nowy audyt zbiorczy – poprzedni zostaje, więc widać, co się poprawiło
+     * (np. po wdrożeniu poprawek u klienta albo po zmianach w samym audycie).
+     */
+    public function rerun(Request $request, AuditBatch $batch)
+    {
+        $copy = AuditBatch::create([
+            'previous_id' => $batch->id,
+            'name' => preg_replace('/\s+–\s+ponownie\s+\d{2}\.\d{2}\.\d{4}$/u', '', $batch->name).' – ponownie '.now()->format('d.m.Y'),
+            'source' => $batch->source,
+            'options' => $batch->options,
+            'token' => Str::random(40),
+            'created_by' => $request->user()->id,
+            'status' => 'running',
+            'started_at' => now(),
+        ]);
+        foreach ($batch->items as $item) {
+            $copy->items()->create($item->only(['position', 'label', 'url', 'pages', 'note', 'enabled']));
+        }
+        $copy->advance();
+
+        return redirect()->route('audit-batches.show', $copy)->with('success', 'Ponowny audyt całej listy ruszył. Po zakończeniu zobaczysz porównanie z poprzednim.');
+    }
+
     public function destroy(AuditBatch $batch)
     {
         $batch->update(['status' => 'paused']); // trwający audyt nie uruchomi już następnej strony
@@ -182,7 +209,26 @@ class AuditBatchController extends Controller
             'areas' => WebAuditor::AREAS,
             'brand' => Setting::brand(),
             'csvUrl' => route('public.audit-batch.csv', $batch->token),
+            'pdfUrl' => route('public.audit-batch.pdf', $batch->token),
         ]);
+    }
+
+    /** Skrócony PDF całej listy: podsumowanie, ranking, najczęstsze problemy i pilne sprawy każdej strony. */
+    public function publicPdf(string $token, BatchReport $report)
+    {
+        $batch = AuditBatch::where('token', $token)->firstOrFail();
+        $items = $batch->items()->with('audit:id,status,error')->get();
+        @set_time_limit(180);
+
+        return Pdf::loadView('audits.batch-pdf', [
+            'batch' => $batch,
+            'sites' => $report->sites($batch),
+            'stats' => $report->stats($items),
+            'common' => $report->common($items, 2, 30),
+            'areas' => WebAuditor::AREAS,
+            'brand' => Setting::brand(),
+            'reportUrl' => route('public.audit-batch', $batch->token),
+        ])->setPaper('a4')->download('audyt-zbiorczy-'.Str::slug($batch->name).'-'.now()->format('Y-m-d').'.pdf');
     }
 
     public function publicCsv(string $token, BatchReport $report)
