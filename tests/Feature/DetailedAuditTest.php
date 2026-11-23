@@ -330,4 +330,28 @@ class DetailedAuditTest extends TestCase
         auth()->logout();
         $this->get('/audyt/tajny-token')->assertNotFound(); // link dla klienta przestaje działać
     }
+
+    /** <div class="header"> w sekcji treści to nagłówek sekcji, a nie górny pasek witryny – jego H2 liczą się do struktury strony. */
+    public function test_section_header_class_is_not_site_header(): void
+    {
+        config(['adpilot.pagespeed.enabled' => false]);
+        $html = '<!doctype html><html lang="pl"><head><title>Select</title><meta name="viewport" content="width=device-width"></head><body>'
+            .'<header class="site-header"><nav><a href="/">Start</a></nav></header>'
+            .'<section><div class="content"><h1>Linia Select</h1></div></section>'
+            .'<section><div class="header"><h2>Czym jest Select?</h2></div><div class="text"><h3>Marmurkowy deseń</h3><p>'.str_repeat('Opis. ', 60).'</p></div>'
+            .'<div class="card"><div class="card-footer"><h2>Jakość ceniona za granicą</h2></div></div></section>'
+            .'<article><header><h2>Dla wymagających</h2></header><footer><p>Autor</p></footer></article>'
+            .'<footer><h2>Kontakt w stopce</h2></footer></body></html>';
+        Http::fake(fn (Request $r) => rtrim($r->url(), '/') === 'https://naglowki.example'
+            ? Http::response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']) : Http::response('', 404));
+
+        $r = app(PageInspector::class)->inspect('https://naglowki.example');
+        $zones = collect($r['pages']['home']['headings'])->pluck('zone', 'text');
+        $this->assertSame('main', $zones['Czym jest Select?']);
+        $this->assertSame('main', $zones['Jakość ceniona za granicą']);
+        $this->assertSame('main', $zones['Dla wymagających']);
+        $this->assertSame('footer', $zones['Kontakt w stopce']);
+        $titles = collect($r['findings'])->where('group', 'Struktura nagłówków')->pluck('title')->implode("\n");
+        $this->assertStringNotContainsString('Przeskoki poziomów', $titles);
+    }
 }

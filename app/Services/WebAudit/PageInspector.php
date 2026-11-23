@@ -1237,16 +1237,25 @@ class PageInspector
 
     private function zone(DOMNode $n): string
     {
-        $zone = 'main';
+        // Nagłówek / stopka WITRYNY, a nie sekcji: <div class="header"> w sekcji treści, <header> / <footer> artykułu
+        // czy „card-footer” to część treści. Dlatego znaczniki i klasy wewnątrz section / article / main się nie liczą.
+        $chain = [];
         for ($p = $n->parentNode; $p instanceof DOMElement; $p = $p->parentNode) {
+            $chain[] = $p;
+        }
+        $zone = 'main';
+        foreach ($chain as $i => $p) {
             $cls = ' '.strtolower($p->getAttribute('class')).' ';
             $tag = $p->nodeName;
-            if ($tag === 'footer' || str_contains($cls, 'elementor-location-footer') || preg_match('/[\s-]footer[\s_-]/', $cls) || $p->getAttribute('id') === 'footer') {
+            $inContent = (bool) array_filter(array_slice($chain, $i + 1), fn (DOMElement $a) => in_array($a->nodeName, ['section', 'article', 'main'], true));
+            $siteFooter = str_contains($cls, 'elementor-location-footer') || str_contains($cls, ' site-footer ') || $p->getAttribute('id') === 'footer' || $p->getAttribute('role') === 'contentinfo';
+            if ($siteFooter || (! $inContent && ($tag === 'footer' || preg_match('/\s(?:footer|page-footer|main-footer)[\s_-]/', $cls)))) {
                 return 'footer';
             }
-            if ($tag === 'nav' || $p->getAttribute('role') === 'navigation' || str_contains($cls, 'nav-menu') || str_contains($cls, ' menu ')) {
+            $siteHeader = str_contains($cls, 'elementor-location-header') || str_contains($cls, ' site-header ') || $p->getAttribute('role') === 'banner';
+            if ($tag === 'nav' || $p->getAttribute('role') === 'navigation' || str_contains($cls, 'nav-menu') || (! $inContent && str_contains($cls, ' menu '))) {
                 $zone = 'nav';
-            } elseif ($zone === 'main' && ($tag === 'header' || str_contains($cls, 'elementor-location-header') || preg_match('/\ssite-header\s|\sheader\s/', $cls))) {
+            } elseif ($zone === 'main' && ($siteHeader || (! $inContent && ($tag === 'header' || str_contains($cls, ' header '))))) {
                 $zone = 'header';
             }
         }
