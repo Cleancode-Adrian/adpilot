@@ -36,6 +36,7 @@ class AiPageReviewer
     - błędy merytoryczne i branżowe (np. pomylone pojęcia fachowe), literówki, błędy odmiany i interpunkcji, zbędne przecinki, angielskie wtręty;
     - sprzeczności między podstronami (ceny, liczby, godziny, obietnice, nazwy usług, nazwa firmy/marki, osoby), ceny odstające od reszty cennika;
     - mylące linki i przyciski (tekst nie odpowiada temu, dokąd prowadzi), menu, którego nazwy nie pasują do zawartości;
+      (Kilka linków o różnych nazwach prowadzących do tej samej podstrony to normalna praktyka – tego NIE zgłaszaj.)
     - braki w formularzu (np. lista wyboru nie zawiera usług, które firma oferuje), zgody bez dokumentów;
     - obietnice bez pokrycia lub ryzykowne prawnie („100% skuteczności”, „raz na zawsze”, „bezpieczne dla wszystkich”), opinie i liczby, które trzeba zweryfikować;
     - braki ważne dla klienta tej branży (cena, czas realizacji, adres, obszar działania, kto prowadzi usługę), elementy wyglądające nieprofesjonalnie.

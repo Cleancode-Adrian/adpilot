@@ -81,8 +81,7 @@ class DetailedAuditTest extends TestCase
         $titles = collect($r['findings'])->keyBy('title');
         $has = fn (string $part) => $this->assertTrue($titles->keys()->contains(fn ($t) => str_contains($t, $part)), "Brak uwagi: $part\n".$titles->keys()->implode("\n"));
 
-        $has('Różne pozycje prowadzą pod ten sam adres');
-        $this->assertSame('pilne', $titles['Różne pozycje prowadzą pod ten sam adres']['sev']);
+        $this->assertFalse($titles->has('Różne pozycje prowadzą pod ten sam adres'), 'różne nazwy linków do tej samej podstrony to normalna praktyka (SEO) – nie zgłaszamy');
         $has('„Mój Blog”');
         $has('Adres e-mail w innej domenie');
         $has('Linki wewnętrzne przez http://');

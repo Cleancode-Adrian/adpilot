@@ -755,45 +755,6 @@ class PageInspector
         $url = $p['final_url'];
         $plText = $p['lang'] === '' || str_starts_with($p['lang'], 'pl');
 
-        // Ten sam adres pod różnymi pozycjami (np. dwie oferty prowadzą do jednej karty)
-        $groups = [];
-        foreach ($p['links'] as $l) {
-            if (! $l['internal'] || $l['zone'] !== 'main' || mb_strlen($l['text']) < 12 || preg_match(self::GENERIC_LINK, $l['text'])) {
-                continue;
-            }
-            $key = rtrim(preg_replace('#^https?://(www\.)?#', '', (string) $l['abs']), '/');
-            $groups[$key][mb_strtolower($l['text'])] = $l['text'];
-        }
-        // słowa nazwy bez interpunkcji, dat i krótkich łączników; porównywane po początku (odmiana: „select” / „selekcjonowana”)
-        $words = fn (string $s) => array_values(array_unique(array_map(fn ($w) => mb_substr($w, 0, 4),
-            array_filter(preg_split('/[^\p{L}]+/u', mb_strtolower($s)), fn ($w) => mb_strlen($w) >= 3))));
-        $pairs = [];
-        $worst = 0.0;
-        foreach ($groups as $target => $texts) {
-            if (count($texts) < 2) {
-                continue;
-            }
-            $t = array_values($texts);
-            similar_text(mb_strtolower($t[0]), mb_strtolower($t[1]), $pct);
-            [$a, $b] = [$words($t[0]), $words($t[1])];
-            // Zupełnie różne teksty (obrazek + tytuł) pomijamy. Tak samo skrót i pełną nazwę tej samej rzeczy
-            // („Sezonowana na mokro” / „Wołowina sezonowana na mokro”, tytuł / tytuł z datą): podejrzane są dopiero
-            // dwie nazwy, z których KAŻDA ma własne słowo – np. „…Poziom Podstawowy” i „…Poziom Rozszerzony”.
-            if ($pct < 60 || ! array_diff($a, $b) || ! array_diff($b, $a)) {
-                continue;
-            }
-            $pairs[] = ['a' => $t[0], 'b' => $t[1], 'url' => 'https://'.$target];
-            $worst = max($worst, $pct);
-        }
-        if ($pairs) {
-            $first = $pairs[0];
-            $this->add($role, 'page', 'Linki', $worst >= 80 ? 'pilne' : 'srednie', 'Różne pozycje prowadzą pod ten sam adres',
-                'Kafelki/linki „'.$first['a'].'” i „'.$first['b'].'” prowadzą pod ten sam adres (…/'.basename($first['url']).'/)'.(count($pairs) > 1 ? ' – i jeszcze '.$this->plural(count($pairs) - 1, 'podobna para', 'podobne pary', 'podobnych par') : '')
-                .'. Jeśli to dwie różne oferty, klient, który kliknie jedną, zobaczy drugą – np. inny poziom albo inną cenę.',
-                'Sprawdzić, dokąd powinien prowadzić każdy kafelek, i poprawić link.',
-                implode("\n", array_map(fn ($x) => '„'.$x['a'].'” / „'.$x['b'].'” → '.$x['url'], array_slice($pairs, 0, 5))), array_slice(array_column($pairs, 'url'), 0, 5), true);
-        }
-
         // Przyciski, które nic nie robią
         $dead = array_filter($p['links'], fn ($l) => $l['zone'] === 'main' && $l['button'] && in_array($l['href'], ['#', '', 'javascript:void(0)', 'javascript:void(0);', 'javascript:;'], true) && $l['text'] !== '');
         if ($dead) {
