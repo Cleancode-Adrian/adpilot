@@ -7,6 +7,7 @@ use App\Models\WebAudit;
 use App\Services\WebAudit\AiPageReviewer;
 use App\Services\WebAudit\AuditReportBuilder;
 use App\Services\WebAudit\BotWall;
+use App\Services\WebAudit\BrowserConsentCheck;
 use App\Services\WebAudit\PageInspector;
 use App\Services\WebAudit\PageSpeed;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,7 +40,7 @@ class DetailedAuditTest extends TestCase
             .'<a href="http://szkola.example/product/fizyka-sprawdziany/">Fizyka – sprawdziany (Poziom Podstawowy)</a>'
             .'<a href="http://szkola.example/product/fizyka-sprawdziany/">Fizyka – sprawdziany (Poziom Rozszerzony)</a>'
             .'<span class="elementor-counter-number" data-to-value="1800">0</span>'
-            .'<img src="https://szkola.example/wp-content/uploads/Zrzut-ekranu-2026-07-08.png" alt="Partner"><img src="/a.png" alt="Partner"><img src="/b.png" alt="Partner"><img src="/c.png" alt="Partner">'
+            .'<img src="https://szkola.example/wp-content/uploads/Zrzut-ekranu-2026-07-08.png" alt="Partner"><img src="/a.png" alt="Partner"><img src="/b.png" alt="Partner"><img src="/c.png" alt="Partner"><img src="/d.jpg"><img src="/e.jpg" alt=""><img src="/ikona.png" width="24" height="24">'
             .'<ul><li>Pierwszy</li><li></li></ul><p>Napisz: <a href="mailto:kontakt@inna-firma.pl">kontakt@inna-firma.pl</a></p>'
             .'<form><input type="text" name="imie" placeholder="Imię"><input type="text" name="telefon" placeholder="Telefon"><input type="email" name="email" placeholder="E-mail">'
             .'<select name="przedmiot"><option>Matematyka</option><option>Fizyka</option></select>'
@@ -99,7 +100,8 @@ class DetailedAuditTest extends TestCase
         $has('Pole telefonu nie włącza klawiatury numerycznej');
         $has('Zgoda w formularzu bez linku');
         $has('brak adresu firmy');
-        $has('Stopka różni się');
+        $this->assertFalse($titles->keys()->contains(fn ($t) => str_contains($t, 'Stopka różni się')), 'różna stopka bywa celowa – nie zgłaszamy');
+        $has('Obrazy bez opisu (alt)');
         $has('prawdopodobnie nie ma numeru');
         $has('Pozycje menu z rozwijaną listą nie mają adresu');
         $has('Bardzo długie podmenu');
@@ -352,5 +354,36 @@ class DetailedAuditTest extends TestCase
         $this->assertSame('footer', $zones['Kontakt w stopce']);
         $titles = collect($r['findings'])->where('group', 'Struktura nagłówków')->pluck('title')->implode("\n");
         $this->assertStringNotContainsString('Przeskoki poziomów', $titles);
+    }
+
+    /** Gdy jest przeglądarka, treść podstron pochodzi z kodu po skryptach – np. nagłówki dokładane przez wtyczkę formularza. */
+    public function test_rendered_html_is_used_for_content_checks(): void
+    {
+        config(['adpilot.pagespeed.enabled' => false]);
+        $raw = '<!doctype html><html lang="pl"><head><title>Kancelaria</title></head><body><main><h1>Kancelaria</h1><p>'.str_repeat('Tekst. ', 40).'</p></main></body></html>';
+        Http::fake(fn (Request $r) => rtrim($r->url(), '/') === 'https://render.example'
+            ? Http::response($raw, 200, ['Content-Type' => 'text/html; charset=UTF-8']) : Http::response('', 404));
+        $rendered = str_replace('</main>', '<h2>Napisz do nas</h2><h4></h4><h4>Dziękujemy!</h4><img src="/a.jpg" alt=""><img src="/b.jpg"></main>', $raw);
+        $this->app->bind(BrowserConsentCheck::class, fn () => new class($rendered) extends BrowserConsentCheck
+        {
+            public function __construct(private string $html) {}
+
+            public function render(array $urls): array
+            {
+                return array_fill_keys($urls, $this->html);
+            }
+
+            public function run(string $url): ?array
+            {
+                return null;
+            }
+        });
+
+        $r = app(PageInspector::class)->inspect('https://render.example');
+        $this->assertTrue($r['pages']['home']['rendered']);
+        $titles = collect($r['findings'])->keyBy('title');
+        $this->assertTrue($titles->has('Puste nagłówki w kodzie'));
+        $this->assertStringContainsString('pusty H4 – po nagłówku H2 „Napisz do nas”', $titles['Puste nagłówki w kodzie']['text']);
+        $this->assertTrue($titles->has('Obrazy bez opisu (alt) – 2 na tej podstronie'));
     }
 }

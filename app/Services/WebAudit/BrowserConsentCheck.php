@@ -59,6 +59,32 @@ class BrowserConsentCheck
         return $this->classify($data);
     }
 
+    /**
+     * Kod podstron po uruchomieniu skryptów (tak jak widzi je przeglądarka i wtyczki SEO): nagłówki, obrazy i formularze
+     * dokładane skryptem. Ekranów weryfikacji zabezpieczeń nie obchodzimy – taka podstrona wraca jako null.
+     *
+     * @param  list<string>  $urls
+     * @return array<string, string> adres => kod HTML (tylko udane)
+     */
+    public function render(array $urls): array
+    {
+        $urls = array_values(array_unique(array_filter($urls)));
+        if (! $urls || ! $this->available()) {
+            return [];
+        }
+        try {
+            $p = Process::path(base_path())->timeout(30 + 25 * count($urls))
+                ->run([(string) config('adpilot.browser_check.node', 'node'), base_path('resources/node/render-pages.mjs'), $this->chrome(), ...$urls]);
+            $data = json_decode(trim($p->output()), true);
+        } catch (Throwable $e) {
+            report($e);
+
+            return [];
+        }
+
+        return array_filter(is_array($data) ? $data : [], fn ($html) => is_string($html) && strlen($html) > 500 && ! BotWall::detect($html));
+    }
+
     /** Surowy zapis z przeglądarki (zapytania, ciasteczka, baner) → co każde narzędzie zrobiło przed zgodą. */
     public function classify(array $data): array
     {

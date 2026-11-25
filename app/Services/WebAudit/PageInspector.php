@@ -69,7 +69,21 @@ class PageInspector
 
     private array $findings = [];
 
-    public function __construct(private PerformanceInspector $performance, private LegalInspector $legal) {}
+    public function __construct(private PerformanceInspector $performance, private LegalInspector $legal, private BrowserConsentCheck $browser) {}
+
+    /** Dołącza do pobranych podstron ich wyrenderowany kod (po skryptach), jeśli na serwerze jest przeglądarka. */
+    private function withRendered(array $fetched): array
+    {
+        $ok = array_filter($fetched, fn ($r) => $r && $r['ok']);
+        $rendered = $this->browser->render(array_values(array_map(fn ($r) => $r['final_url'], $ok)));
+        foreach ($ok as $u => $r) {
+            if (isset($rendered[$r['final_url']])) {
+                $fetched[$u]['rendered'] = $rendered[$r['final_url']];
+            }
+        }
+
+        return $fetched;
+    }
 
     // ------------------------------------------------------------------ wejście
 
@@ -94,6 +108,7 @@ class PageInspector
         $this->siteWww = str_starts_with($finalHost, 'www.');
         $this->scheme = (string) parse_url($home['final_url'], PHP_URL_SCHEME) ?: 'https';
 
+        $home = $this->withRendered([$root => $home])[$root];
         $pages = ['home' => $this->snapshot('home', $home)];
 
         // Kontakt, oferta, o firmie – po tekście linku i adresie (najpierw linki z menu i nagłówka)
@@ -111,7 +126,7 @@ class PageInspector
             $contact = $candidates['contact'] ?? null;
             $toFetch = $keys + ($contact && ! array_filter($keys, fn ($k) => $this->sameUrl($k, $contact)) ? ['contact' => $contact] : []);
         }
-        foreach ($this->fetch(array_values($toFetch)) as $u => $res) {
+        foreach ($this->withRendered($this->fetch(array_values($toFetch))) as $u => $res) {
             $role = array_search($u, $toFetch, true);
             if ($role && $res) {
                 $pages[$role] = $this->snapshot($role, $res);
@@ -121,7 +136,7 @@ class PageInspector
         // Przykładowa karta oferty / usługi – z oferty (albo strony głównej)
         $detail = $keys ? null : $this->detailCandidate($pages['offer'] ?? null, $pages['home'], array_values(array_map(fn ($p) => $p['final_url'], $pages)));
         if ($detail) {
-            $res = $this->fetch([$detail])[$detail] ?? null;
+            $res = $this->withRendered($this->fetch([$detail]))[$detail] ?? null;
             if ($res) {
                 $pages['detail'] = $this->snapshot('detail', $res);
             }
@@ -319,7 +334,8 @@ class PageInspector
         if (! $res['ok']) {
             return ['label' => str_starts_with($role, 'key') ? $this->keyLabel($res['url'], null) : $base['label']] + $base + ['title' => null, 'links' => [], 'emails' => [], 'raw' => ''];
         }
-        $html = $res['body'];
+        // treść, nagłówki, obrazy, formularze – z kodu po skryptach (jeśli jest); surowy kod zostaje do sprawdzeń kodu (skrypty, zgody, wydajność)
+        $html = $res['rendered'] ?? $res['body'];
         $dom = new DOMDocument;
         libxml_use_internal_errors(true);
         $dom->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NOWARNING | LIBXML_NOERROR);
@@ -355,7 +371,10 @@ class PageInspector
             if ($src === '' || str_starts_with($src, 'data:')) {
                 continue;
             }
-            $images[] = ['src' => mb_substr($src, 0, 300), 'alt' => $img->hasAttribute('alt') ? $this->clean($img->getAttribute('alt')) : null, 'zone' => $this->zone($img)];
+            $w = (int) $img->getAttribute('width');
+            $hgt = (int) $img->getAttribute('height');
+            $images[] = ['src' => mb_substr($src, 0, 300), 'alt' => $img->hasAttribute('alt') ? $this->clean($img->getAttribute('alt')) : null, 'zone' => $this->zone($img),
+                'icon' => ($w && $w <= 40) || ($hgt && $hgt <= 40)];
         }
 
         $forms = [];
@@ -496,7 +515,8 @@ class PageInspector
             'header_blocks' => $headerBlocks,
             'footer_links' => array_values(array_unique(array_filter(array_map(fn ($l) => $l['zone'] === 'footer' ? $l['text'] : null, $links)))),
             'text' => $text,
-            'raw' => $html,
+            'raw' => $res['body'],
+            'rendered' => isset($res['rendered']),
         ];
     }
 
@@ -763,7 +783,20 @@ class PageInspector
                 'Podpiąć właściwy adres (formularz, telefon, oferta).', null, [$url], true);
         }
 
-        // Obrazy: nazwy plików zamiast opisów, ten sam opis wielu obrazów, robocze pliki
+        // Obrazy bez opisu (alt brak albo pusty) – pomijamy ikony SVG, piksele śledzące i miniaturki do 40 px
+        $noAlt = array_values(array_filter($p['images'], fn ($i) => ($i['alt'] === null || $i['alt'] === '') && ! ($i['icon'] ?? false)
+            && ! preg_match('/\.svg(\?|$)/i', $i['src']) && ! preg_match('~facebook\.com/tr|google-analytics|pixel|spacer|blank\.gif~i', $i['src'])));
+        if (count($noAlt) >= 2) {
+            $missingAttr = count(array_filter($noAlt, fn ($i) => $i['alt'] === null));
+            $names = array_slice(array_values(array_unique(array_map(fn ($i) => urldecode(basename((string) parse_url($i['src'], PHP_URL_PATH))), $noAlt))), 0, 6);
+            $this->add($role, 'page', 'Obrazy i grafiki', count($noAlt) >= 5 ? 'srednie' : 'drobne', 'Obrazy bez opisu (alt) – '.count($noAlt).' na tej podstronie',
+                $this->plural(count($noAlt), 'obraz nie ma', 'obrazy nie mają', 'obrazów nie ma').' opisu alternatywnego'.($missingAttr ? ' ('.$missingAttr.' bez atrybutu alt, reszta z pustym)' : ' (atrybut alt jest pusty)')
+                .'. Google nie wie, co przedstawiają (mniej ruchu z wyszukiwarki grafiki), a osoby niewidome słyszą tylko „obraz”.',
+                'Uzupełnić opisy obrazów w bibliotece mediów (WordPress: Media → tekst alternatywny) – krótko, co jest na obrazie; pusty alt zostawić tylko dla ozdobników.',
+                implode("\n", $names), [$url]);
+        }
+
+        // Obrazy: nazwy plików zamiast opisów, ten sam opis wielu obrazów
         $fileAlts = array_values(array_unique(array_filter(array_column($p['images'], 'alt'), fn ($a) => $a && (preg_match('/\.(jpe?g|png|gif|webp|svg)$/i', $a) || (! str_contains($a, ' ') && preg_match('/[-_]/', $a) && mb_strlen($a) > 5)))));
         if (count($fileAlts) >= 2) {
             $this->add($role, 'page', 'Obrazy i grafiki', 'drobne', 'Opisy obrazków to nazwy plików',
@@ -899,9 +932,15 @@ class PageInspector
         $h1 = array_values(array_filter($hs, fn ($h) => $h['level'] === 1 && ! $h['empty']));
 
         if (! $h1) {
+            $first = array_values(array_filter($main, fn ($h) => ! $h['empty']))[0] ?? null;
+            $title = trim((string) preg_split('/\s+[–—|»·-]\s+/u', (string) ($p['title'] ?? ''))[0]);
             $this->add($role, 'page', 'Struktura nagłówków', 'srednie', 'Brak głównego nagłówka H1',
-                'Podstrona nie ma nagłówka H1, który mówi klientowi, Google i asystentom AI, o czym jest strona'.($main ? ' – pierwszy nagłówek to H'.$main[0]['level'].' „'.$main[0]['text'].'”' : '').'.',
-                'Ustawić główny tytuł podstrony jako H1 (Elementor: widżet Nagłówek → znacznik HTML H1).', null, [$url]);
+                'Podstrona nie ma nagłówka H1, który mówi klientowi, Google i asystentom AI, o czym jest strona.'
+                .($first ? ' Pierwszy nagłówek w treści to H'.$first['level'].' „'.mb_strimwidth($first['text'], 0, 80, '…').'”.' : ' W treści nie ma żadnego nagłówka.'),
+                $first
+                    ? 'Zmienić nagłówek „'.mb_strimwidth($first['text'], 0, 60, '…').'” z H'.$first['level'].' na H1 (o ile to główny tytuł podstrony) albo dodać na górze H1 z tematem strony'.($title !== '' ? ', np. „'.mb_strimwidth($title, 0, 60, '…').'”' : '').'.'
+                    : 'Dodać na górze podstrony H1 z jej tematem'.($title !== '' ? ', np. „'.mb_strimwidth($title, 0, 60, '…').'”' : '').'.',
+                $first ? 'H'.$first['level'].' „'.mb_strimwidth($first['text'], 0, 80, '…').'” → H1' : null, [$url]);
         } elseif (count($h1) > 1) {
             $this->add($role, 'page', 'Struktura nagłówków', 'drobne', 'Kilka nagłówków H1 na jednej podstronie',
                 'Podstrona ma '.count($h1).' nagłówki H1: „'.implode('”, „', array_map(fn ($h) => mb_strimwidth($h['text'], 0, 60, '…'), array_slice($h1, 0, 4))).'”. Główny temat strony się rozmywa.',
@@ -926,11 +965,24 @@ class PageInspector
                 'Nagłówki nie tworzą porządnego spisu treści – poziomy są pomijane ('.$this->plural(count($skips), 'miejsce', 'miejsca', 'miejsc').'), zwykle dlatego, że poziom nagłówka dobrano do wielkości liter, a nie do struktury. Czytniki ekranu i Google gorzej rozumieją, co jest działem, a co podpunktem.',
                 'Ustawiać poziomy po kolei (H2 dla sekcji, H3 dla elementów w sekcji); wygląd zmieniać stylem, nie poziomem.', implode("\n", array_slice($skips, 0, 5)), [$url]);
         }
-        $empty = count(array_filter($hs, fn ($h) => $h['empty']));
-        if ($empty) {
+        $emptyAt = [];
+        foreach ($hs as $i => $h) {
+            if (! $h['empty']) {
+                continue;
+            }
+            $prevText = null;
+            for ($j = $i - 1; $j >= 0; $j--) {
+                if (! $hs[$j]['empty']) {
+                    $prevText = 'H'.$hs[$j]['level'].' „'.mb_strimwidth($hs[$j]['text'], 0, 50, '…').'”';
+                    break;
+                }
+            }
+            $emptyAt[] = 'pusty H'.$h['level'].($prevText ? ' – po nagłówku '.$prevText : ' – na początku strony');
+        }
+        if ($emptyAt) {
             $this->add($role, 'page', 'Struktura nagłówków', 'drobne', 'Puste nagłówki w kodzie',
-                $this->plural($empty, 'nagłówek jest pusty', 'nagłówki są puste', 'nagłówków jest pustych').' (bez tekstu albo tylko z ikoną/obrazkiem bez opisu). Czytnik ekranu ogłasza „nagłówek” bez treści.',
-                'Usunąć puste nagłówki albo wpisać tekst.', null, [$url]);
+                $this->plural(count($emptyAt), 'nagłówek jest pusty', 'nagłówki są puste', 'nagłówków jest pustych').' (bez tekstu albo tylko z ikoną/obrazkiem bez opisu): '.implode('; ', array_slice($emptyAt, 0, 3)).'. Czytnik ekranu ogłasza „nagłówek” bez treści, a Google widzi dziurę w strukturze.',
+                'Usunąć puste nagłówki albo wpisać w nie tekst (często to pozostałość szablonu lub komunikatu formularza).', implode("\n", array_slice($emptyAt, 0, 5)), [$url]);
         }
         $long = array_filter($main, fn ($h) => mb_strlen($h['text']) > 110);
         if ($long) {
@@ -1074,19 +1126,7 @@ class PageInspector
         if (count($pages) < 3) {
             return;
         }
-        $footers = array_map(fn ($p) => $p['footer_links'], $pages);
-        $counts = array_count_values(array_merge(...array_values(array_map('array_unique', $footers))));
-        foreach ($pages as $role => $p) {
-            if (! $p['footer_links']) {
-                continue;
-            }
-            $missing = array_filter(array_keys($counts), fn ($t) => $counts[$t] >= count($pages) - 1 && $counts[$t] >= 2 && ! in_array($t, $p['footer_links'], true) && mb_strlen($t) > 3);
-            if ($missing) {
-                $this->add($role, 'page', 'Linki', 'drobne', 'Stopka różni się od pozostałych podstron',
-                    'W stopce tej podstrony brakuje linku „'.implode('”, „', array_slice($missing, 0, 3)).'”, który jest w stopce pozostałych stron. Zwykle to znak, że podstrona ma osobny, nieaktualny szablon stopki.',
-                    'Ujednolicić stopkę (jeden wspólny szablon).', null, [$p['final_url']]);
-            }
-        }
+
     }
 
     // ------------------------------------------------------------------ mobile a desktop

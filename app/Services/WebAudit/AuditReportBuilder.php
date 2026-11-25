@@ -199,7 +199,11 @@ class AuditReportBuilder
         }
 
         // Dostępność i dobre praktyki z Lighthouse (np. kontrast tekstu – nie da się go sprawdzić bez przeglądarki)
+        $ownAlt = (bool) array_filter($inspection['findings'] ?? [], fn ($f) => str_starts_with($f['title'], 'Obrazy bez opisu (alt)'));
         foreach ($ps['accessibility_fails'] ?? [] as $f) {
+            if ($f['id'] === 'image-alt' && $ownAlt) {
+                continue; // obrazy bez altów opisane już przy każdej podstronie
+            }
             $add('Dostępność', in_array($f['id'], ['color-contrast', 'button-name', 'link-name', 'label', 'image-alt'], true) && $f['count'] >= 3 ? 'srednie' : 'drobne', rtrim($f['title'], '.'),
                 trim($f['description'].($f['count'] ? ' Elementów: '.$f['count'].'.' : '')), null, [], $f['examples'] ? implode("\n", $f['examples']) : null);
         }
