@@ -278,7 +278,9 @@ class PageInspector
                 'body' => $isHtml ? $r->body() : '', 'error' => null, 'cookies' => array_values(array_unique(array_filter($cookies))),
                 'headers' => array_intersect_key($headers, array_flip(['content-encoding', 'x-encoded-content-encoding', 'cache-control', 'server', 'x-cache', 'cf-cache-status', 'x-litespeed-cache',
                     'x-proxy-cache', 'x-wp-super-cache', 'x-rocket-nginx-serving-static', 'x-nginx-cache', 'x-sucuri-cache', 'age', 'content-type'])),
-                'ttfb_ms' => isset($stats['starttransfer_time']) && $stats['starttransfer_time'] > 0 ? (int) round($stats['starttransfer_time'] * 1000) : null];
+                // Sam czas pracy serwera: od wysłania zapytania do pierwszego bajtu (bez DNS, łączenia i szyfrowania po naszej stronie)
+                'ttfb_ms' => isset($stats['starttransfer_time']) && $stats['starttransfer_time'] > 0
+                    ? (int) round(max(0, $stats['starttransfer_time'] - (float) ($stats['pretransfer_time'] ?? 0)) * 1000) : null];
         }
 
         return $out;

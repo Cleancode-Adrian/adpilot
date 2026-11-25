@@ -415,14 +415,18 @@ class PerformanceInspector
 
     private function serverFindings(array $pages, array $stats): void
     {
-        $slow = array_filter($stats, fn ($s) => ($s['ttfb_ms'] ?? 0) > 1200);
+        // Pojedynczy wolny odczyt to często przypadek (chwilowe obciążenie, sieć) – liczy się typowa podstrona (mediana)
+        $measured = array_values(array_filter(array_map(fn ($s) => $s['ttfb_ms'] ?? null, $stats)));
+        sort($measured);
+        $median = $measured ? $measured[intdiv(count($measured), 2)] : 0;
+        $slow = $median > 1200 ? array_filter($stats, fn ($s) => ($s['ttfb_ms'] ?? 0) > 1200) : [];
         $noCache = ! array_filter($stats, fn ($s) => $s['page_cache']);
         if ($slow) {
             $list = implode(', ', array_map(fn ($s) => $s['label'].' – '.number_format($s['ttfb_ms'] / 1000, 1, ',', '').' s', $slow));
-            $this->add('Serwer i pamięć podręczna', max(array_column($slow, 'ttfb_ms')) > 2500 ? 'pilne' : 'srednie', 'Serwer długo odpowiada',
+            $this->add('Serwer i pamięć podręczna', $median > 2500 ? 'pilne' : 'srednie', 'Serwer długo odpowiada',
                 'Czas do pierwszego bajtu odpowiedzi (TTFB): '.$list.'. Dobry wynik to poniżej 0,6 s – przez ten czas klient widzi pusty ekran.'.($noCache ? ' Nie widać śladów cache strony.' : ''),
                 'Włączyć cache całych stron (np. LiteSpeed Cache, WP Rocket, cache hostingu), sprawdzić wersję PHP i obciążenie hostingu.');
-        } elseif ($noCache && array_filter($stats, fn ($s) => ($s['ttfb_ms'] ?? 0) > 600)) {
+        } elseif ($noCache && $median > 600) {
             $this->add('Serwer i pamięć podręczna', 'drobne', 'Brak śladów cache strony',
                 'Strony są generowane przy każdym wejściu (czas odpowiedzi powyżej 0,6 s, brak nagłówków ani znaczników wtyczki cache).',
                 'Włączyć cache stron (wtyczka cache lub funkcja hostingu).', null, [], true);
