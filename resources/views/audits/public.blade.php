@@ -18,6 +18,10 @@
     $effort = ['S' => 'S – do 2 dni pracy', 'M' => 'M – ok. 3–5 dni pracy', 'L' => 'L – powyżej tygodnia pracy'];
     $start = collect($r['plan']['now'])->concat($r['plan']['month'])->take(6);
     $contact = collect([$brand['email'], $brand['phone'], $brand['website']])->filter();
+    // Raport wewnętrzny (audyt z listy stron): tylko błędy i to, co do poprawy – bez rzeczy „na zielono”, propozycji i reklamy
+    $internal = $internal ?? false;
+    $pageByRole = collect($r['pages'])->keyBy('role');
+    $showSection = fn ($s) => ! $internal || $s['groups'] || $pageByRole->has($s['key']);
 @endphp
 <!DOCTYPE html>
 <html lang="pl">
@@ -106,7 +110,7 @@
     </table>
 
     <h1>{{ $company }} – szczegółowa analiza strony</h1>
-    <div class="subtitle">{{ $host }}{{ $r['industry'] ? ' · '.$r['industry'] : '' }} · błędy w treści, w kodzie, różnice telefon/komputer i propozycje rozbudowy · stan na {{ $date }}</div>
+    <div class="subtitle">{{ $host }}{{ $r['industry'] ? ' · '.$r['industry'] : '' }} · @if($internal)raport wewnętrzny: błędy i rzeczy do poprawy, najpierw na podstronach z frazami @else błędy w treści, w kodzie, różnice telefon/komputer i propozycje rozbudowy @endif · stan na {{ $date }}</div>
 
     {{-- ============ Podsumowanie ============ --}}
     <h2>Podsumowanie</h2>
@@ -137,7 +141,7 @@
                         @endforeach
                     </tr>
                 </table>
-                <div class="muted small" style="margin-top: 4px; text-align: center">{{ count($r['proposals']) }} {{ $pl(count($r['proposals']), 'propozycja', 'propozycje', 'propozycji') }} rozbudowy</div>
+                @unless($internal)<div class="muted small" style="margin-top: 4px; text-align: center">{{ count($r['proposals']) }} {{ $pl(count($r['proposals']), 'propozycja', 'propozycje', 'propozycji') }} rozbudowy</div>@endunless
             </td>
         </tr>
     </table>
@@ -159,7 +163,7 @@
         </div>
     @endif
 
-    @if(! empty($r['strengths']))
+    @if(! empty($r['strengths']) && ! $internal)
         <div style="margin-top: 10px"><strong style="color: #2e7d32">Co działa dobrze:</strong> {{ implode(' · ', $r['strengths']) }}</div>
     @endif
 
@@ -167,7 +171,7 @@
     <h3>Spis treści</h3>
     <table class="toc">
         <tr><td style="width: 30px">0.</td><td>@unless($pdf)<a href="#zakres">@endunless Zakres i metoda @unless($pdf)</a>@endunless</td><td></td></tr>
-        @foreach($r['sections'] as $s)
+        @foreach(array_filter($r['sections'], $showSection) as $s)
             <tr>
                 <td>{{ $s['num'] }}.</td>
                 <td>@unless($pdf)<a href="#s{{ $s['num'] }}">@endunless{{ $s['title'] }}@unless($pdf)</a>@endunless</td>
@@ -180,9 +184,11 @@
             </tr>
         @endforeach
         @php $n = count($r['sections']); @endphp
-        <tr><td>{{ $n + 1 }}.</td><td>Plan działań</td><td></td></tr>
-        <tr><td>{{ $n + 2 }}.</td><td>Propozycje rozbudowy</td><td></td></tr>
-        <tr><td>{{ $n + 3 }}.</td><td>Checklista do sprawdzenia na telefonie i komputerze</td><td></td></tr>
+        @unless($internal)
+            <tr><td>{{ $n + 1 }}.</td><td>Plan działań</td><td></td></tr>
+            <tr><td>{{ $n + 2 }}.</td><td>Propozycje rozbudowy</td><td></td></tr>
+        @endunless
+        @if(! $internal || $r['checklist'])<tr><td>@unless($internal){{ $n + 3 }}.@endunless</td><td>Checklista do sprawdzenia na telefonie i komputerze</td><td></td></tr>@endif
         @if(array_filter($r['pages'], fn ($p) => ! empty($p['outline'])))<tr><td></td><td>Załącznik: struktura nagłówków</td><td></td></tr>@endif
     </table>
 
@@ -194,11 +200,12 @@
             @foreach($r['pages'] as $p)
                 <tr>
                     <td style="width: 34%"><strong>{{ $p['label'] }}</strong></td>
-                    <td class="url" style="margin: 0">{{ $p['url'] }} @if(! $p['ok'])<span style="color: #c0392b">(błąd {{ $p['status'] ?: 'połączenia' }})</span>@endif</td>
+                    <td class="url" style="margin: 0"><a href="{{ $p['url'] }}">{{ $p['url'] }}</a> @if(! $p['ok'])<span style="color: #c0392b">(błąd {{ $p['status'] ?: 'połączenia' }})</span>@endif</td>
                 </tr>
             @endforeach
         </table>
     @endif
+    @unless($internal)
     <p style="margin: 8px 0 4px">Dla każdej podstrony sprawdziliśmy:</p>
     <table class="check">
         <tr><td class="square" style="width: 14px">■</td><td><strong>treść</strong> widoczną dla klienta – błędy, sprzeczności, ceny, teksty po angielsku (także ukryte w kodzie: opisy obrazków, podpowiedzi pól, teksty dla czytników ekranu), język strony;</td></tr>
@@ -210,6 +217,7 @@
     </table>
     <p style="margin: 6px 0 4px">Dodatkowo cała strona przeszła sprawdzenie techniczne: do {{ $a['seo']['pages'] ?? config('adpilot.site_audit.prospect_pages') }} podstron pod kątem błędów i SEO technicznego, pomiar i zgody RODO oraz bezpieczeństwo.</p>
     <p class="note">Ograniczenie: audyt czyta kod strony, a nie jej wygląd na ekranie (style, animacje, rozwijane menu). Uwagi o różnicach telefon/komputer wynikają z budowy kodu – takie punkty są oznaczone „do potwierdzenia”, a na końcu dokumentu jest checklista do szybkiego sprawdzenia.@if($r['verify_count']) Punktów do potwierdzenia: {{ $r['verify_count'] }}.@endif</p>
+    @endunless
     <p class="note">Oznaczenia: <span style="color: #c0392b; font-weight: bold">PILNE</span> – traci klientów lub pieniądze, wprowadza w błąd albo niesie ryzyko prawne; <span style="color: #d4880f; font-weight: bold">ŚREDNIE</span> – wyraźnie utrudnia decyzję lub kontakt; <span style="color: #3a6ea5; font-weight: bold">DROBNE</span> – kosmetyka i porządki.</p>
     @if(! empty($r['blocked']))
         <div class="box">
@@ -222,10 +230,29 @@
     @endif
 
     {{-- ============ Sekcje ============ --}}
-    @foreach($r['sections'] as $s)
+    @foreach(array_values(array_filter($r['sections'], $showSection)) as $s)
         <h2 id="s{{ $s['num'] }}" @if($pdf && $loop->first) class="newpage" @endif>{{ $s['num'] }}. {{ $s['title'] }}</h2>
         @if($s['subtitle'])<div class="muted">{{ $s['subtitle'] }}</div>@endif
-        @if($s['url'])<div class="url">{{ $s['url'] }}</div>@endif
+        @if($s['url'])<div class="url"><a href="{{ $s['url'] }}">{{ $s['url'] }}</a></div>@endif
+
+        @php $seo = $internal ? ($pageByRole[$s['key']]['seo'] ?? null) : null; @endphp
+        @if($seo)
+            @php
+                $bad = '#c0392b';
+                $tlc = $seo['title_len'] === 0 || $seo['title_len'] > 65 || ($seo['title_len'] < 30 && $seo['kind'] !== 'strona główna') ? $bad : null;
+                $dlc = $seo['description_len'] === 0 || $seo['description_len'] > 170 || $seo['description_len'] < 70 ? $bad : null;
+                $h1c = count($seo['h1']) !== 1 ? $bad : null;
+            @endphp
+            <table class="plan" style="margin-top: 6px">
+                <tr><td style="width: 22%" class="muted">Typ / fraza (z H1 i tytułu)</td><td>{{ $seo['kind'] }}@if($seo['phrase']) · <strong>{{ $seo['phrase'] }}</strong>@endif
+                    @if($seo['noindex'])<span style="color: {{ $bad }}; font-weight: bold"> · NOINDEX – niewidoczna w Google</span>@endif
+                    @if($seo['canonical_other'])<span style="color: {{ $bad }}; font-weight: bold"> · canonical → {{ $seo['canonical_other'] }}</span>@endif</td></tr>
+                <tr><td class="muted">Tytuł w Google</td><td>{{ $seo['title'] ?: '– brak –' }} <span class="small" style="color: {{ $tlc ?? '#6b7280' }}">({{ $seo['title_len'] }} zn.)</span></td></tr>
+                <tr><td class="muted">Opis w Google</td><td>{{ $seo['description'] ?: '– brak –' }} <span class="small" style="color: {{ $dlc ?? '#6b7280' }}">({{ $seo['description_len'] }} zn.)</span></td></tr>
+                <tr><td class="muted">Nagłówek H1</td><td @if($h1c) style="color: {{ $h1c }}" @endif>{{ $seo['h1'] ? '„'.implode('”, „', $seo['h1']).'”' : '– brak –' }}</td></tr>
+                <tr><td class="muted">Treść</td><td>ok. {{ $seo['words'] }} słów @if($seo['links_in_content'] !== null)· linki z treści do innych podstron: {{ $seo['links_in_content'] }}@endif</td></tr>
+            </table>
+        @endif
 
         @if($s['key'] === 'perf')
             @php
@@ -264,7 +291,8 @@
                 <table class="plan">
                     <tr><th>Wskaźnik</th><th style="width: 18%; text-align: right">Telefon</th><th style="width: 18%; text-align: right">Komputer</th><th style="width: 18%; text-align: right">Cel</th></tr>
                     @foreach($rows as [$k, $lbl, $goal, $good, $bad, $f])
-                        @if(($mob[$k] ?? null) !== null || ($desk[$k] ?? null) !== null)
+                        @php $allGreen = collect([$mob[$k] ?? null, $desk[$k] ?? null])->filter(fn ($v) => $v !== null)->every(fn ($v) => $col($v, $good, $bad, $f) === '#0a7d0a'); @endphp
+                        @if((($mob[$k] ?? null) !== null || ($desk[$k] ?? null) !== null) && ! ($internal && $allGreen))
                             <tr>
                                 <td>{{ $lbl }}</td>
                                 <td style="text-align: right; font-weight: bold; color: {{ $col($mob[$k] ?? null, $good, $bad, $f) }}">{{ $fmt($mob[$k] ?? null, $f) }}</td>
@@ -279,11 +307,12 @@
                 <p class="note">Google PageSpeed był niedostępny w czasie audytu{{ ! empty($pf['avg_ms']) ? ' – średni czas odpowiedzi serwera przy przejściu po stronie: '.$pf['avg_ms'].' ms' : '' }}. Pozostałe pomiary poniżej pochodzą z naszego sprawdzenia kodu i plików.</p>
             @endif
 
-            @if(! empty($pf['pages']))
+            @php $perfPages = array_values(array_filter($pf['pages'] ?? [], fn ($ps) => ! $internal || ($ps['ttfb_ms'] ?? 0) > 600 || $ps['html_kb'] > 150 || $ps['dom'] > 1500 || ! $ps['compressed'])); @endphp
+            @if($perfPages)
                 <h3>Podstrony – kod i serwer</h3>
                 <table class="plan">
                     <tr><th>Podstrona</th><th style="text-align: right">Odpowiedź serwera</th><th style="text-align: right">Kod HTML</th><th style="text-align: right">Elementy</th><th style="text-align: right">Pliki JS / CSS</th><th style="text-align: right">Zewn. usługi</th><th>Kompresja / cache</th></tr>
-                    @foreach($pf['pages'] as $ps)
+                    @foreach($perfPages as $ps)
                         <tr>
                             <td>{{ $ps['label'] }}</td>
                             <td style="text-align: right; color: {{ $col($ps['ttfb_ms'], 600, 1800, 'ms') }}">{{ $fmt($ps['ttfb_ms'], 'ms') }}</td>
@@ -327,11 +356,18 @@
                 $banner = match ($lg['banner']) { 'cmp' => 'baner zgód: '.implode(', ', $lg['cmp']).($lg['cmp_auto'] ? ' (automatyczne blokowanie skryptów)' : ''),
                     'own' => 'własny baner cookies (nie rozpoznano platformy)', 'info' => 'tylko komunikat „strona używa cookies” – bez możliwości odmowy', default => 'nie znaleziono banera cookies' };
             @endphp
-            <h3>Narzędzia śledzące i zgody</h3>
-            @if($lg['tools'])
+            @php
+                $tools = array_values(array_filter($lg['tools'], fn ($t) => ! $internal || $t['ok'] !== true));
+                $docs = array_values(array_filter($lg['documents'], function ($d) use ($internal, $docStatus) {
+                    $ok = $docStatus[$d['status']][1] ?? null;
+                    return ! $internal || ($ok !== true && ! (! $d['required'] && $d['status'] === 'missing'));
+                }));
+            @endphp
+            @if(! $internal || $tools)<h3>Narzędzia śledzące i zgody</h3>@endif
+            @if($tools)
                 <table class="plan">
                     <tr><th>Narzędzie</th><th>Identyfikator</th><th>Skąd</th><th>Kiedy się uruchamia</th></tr>
-                    @foreach($lg['tools'] as $tool)
+                    @foreach($tools as $tool)
                         <tr>
                             <td>{{ $tool['name'] }}</td>
                             <td style="word-break: break-all">{{ implode(', ', $tool['ids']) ?: '–' }}</td>
@@ -340,16 +376,19 @@
                         </tr>
                     @endforeach
                 </table>
-            @else
+            @elseif(! $lg['tools'])
                 <p class="note">Nie wykryto Google Analytics, Tag Managera ani pikseli reklamowych – strona nie mierzy ruchu (to osobny problem marketingowy, opisany w części „Kod i technika”).</p>
             @endif
-            <div class="note">Baner: {{ $banner }}.@if($lg['consent_mode']) Kod strony ustawia Google Consent Mode z domyślną odmową.@endif
-                @if(! empty($lg['browser'])) Kolumna „Kiedy się uruchamia” pochodzi ze sprawdzenia w prawdziwej przeglądarce: stronę otwarto bez klikania w banerze i zapisano, które narzędzia wysłały dane lub zapisały ciasteczka.@endif</div>
+            @if(! $internal || $tools || $lg['banner'] !== 'cmp')
+                <div class="note">Baner: {{ $banner }}.@if($lg['consent_mode']) Kod strony ustawia Google Consent Mode z domyślną odmową.@endif
+                    @if(! empty($lg['browser']) && $tools) Kolumna „Kiedy się uruchamia” pochodzi ze sprawdzenia w prawdziwej przeglądarce: stronę otwarto bez klikania w banerze i zapisano, które narzędzia wysłały dane lub zapisały ciasteczka.@endif</div>
+            @endif
 
+            @if($docs)
             <h3>Dokumenty i informacje wymagane prawem</h3>
             <table class="plan">
                 <tr><th>Dokument</th><th>Stan</th><th>Adres</th></tr>
-                @foreach($lg['documents'] as $doc)
+                @foreach($docs as $doc)
                     @php [$st, $stOk] = $docStatus[$doc['status']] ?? [$doc['status'], null]; if (! $doc['required'] && $doc['status'] === 'missing') { $stOk = null; } @endphp
                     <tr>
                         <td>{{ $doc['label'] }}@unless($doc['required'])<span class="muted small"> (jeśli dotyczy)</span>@endunless</td>
@@ -358,6 +397,7 @@
                     </tr>
                 @endforeach
             </table>
+            @endif
             @if(! empty($lg['promo']))
                 <div class="note">Omnibus: sprawdzono {{ $lg['promo']['checked'] }} {{ $pl($lg['promo']['checked'], 'stronę', 'strony', 'stron') }} sklepu – {{ $lg['promo']['found'] ? ($lg['promo']['lowest'] ? 'przy promocjach jest informacja o najniższej cenie z 30 dni.' : 'przy promocjach brakuje informacji o najniższej cenie z 30 dni.') : 'nie było na nich obniżonych cen.' }}</div>
             @endif
@@ -386,6 +426,7 @@
     @endforeach
 
     {{-- ============ Plan działań ============ --}}
+    @unless($internal)
     <h2 @if($pdf) class="newpage" @endif>{{ $n + 1 }}. Plan działań</h2>
     <div class="muted">Wszystkie uwagi w kolejności wykonania. Numer odsyła do opisu w raporcie. „Treść” – zmiany w tekstach i grafikach (może je zrobić firma), „technika” – zmiany w ustawieniach i kodzie.</div>
     @foreach(['now' => ['Teraz – do tygodnia', 'pilne'], 'month' => ['W tym miesiącu', 'srednie'], 'later' => ['Przy okazji', 'drobne']] as $key => [$title, $sv])
@@ -421,24 +462,27 @@
             <tr><td class="k">Szacowany nakład</td><td>{{ $effort[$p['effort']] ?? $p['effort'] }}</td></tr>
         </table>
     @endforeach
+    @endunless
 
     {{-- ============ Checklista ============ --}}
-    <h2>{{ $n + 3 }}. Checklista do sprawdzenia na telefonie i komputerze</h2>
+    @if(! $internal || $r['checklist'])
+    <h2>@unless($internal){{ $n + 3 }}. @endunless Checklista do sprawdzenia na telefonie i komputerze</h2>
     <div class="muted">Punkty, których nie da się potwierdzić bez przeglądarki. Najprościej sprawdzić je na własnym telefonie i w Chrome (F12 → ikona telefonu → np. iPhone 12 oraz szerokość 1440 px), najlepiej w trybie incognito.</div>
     <table class="check" style="margin-top: 6px">
         @foreach($r['checklist'] as $item)
             <tr><td style="width: 18px" class="square">☐</td><td>{{ $item }}</td></tr>
         @endforeach
     </table>
+    @endif
 
     <p style="margin-top: 14px"><strong>Podsumowanie:</strong>
         {{ $c['pilne'] }} {{ $pl($c['pilne'], 'błąd pilny', 'błędy pilne', 'błędów pilnych') }},
         {{ $c['srednie'] }} {{ $pl($c['srednie'], 'średni', 'średnie', 'średnich') }},
-        {{ $c['drobne'] }} {{ $pl($c['drobne'], 'drobny', 'drobne', 'drobnych') }},
-        {{ count($r['proposals']) }} {{ $pl(count($r['proposals']), 'propozycja', 'propozycje', 'propozycji') }} rozbudowy.</p>
+        {{ $c['drobne'] }} {{ $pl($c['drobne'], 'drobny', 'drobne', 'drobnych') }}@if($internal).@else,
+        {{ count($r['proposals']) }} {{ $pl(count($r['proposals']), 'propozycja', 'propozycje', 'propozycji') }} rozbudowy.@endif</p>
 
     {{-- ============ Załącznik: struktura nagłówków ============ --}}
-    @php $outlines = array_filter($r['pages'], fn ($p) => ! empty($p['outline'])); @endphp
+    @php $outlines = array_filter($r['pages'], fn ($p) => ! empty($p['outline']) && (! $internal || collect($p['outline'])->contains(fn ($h) => ! empty($h['problem'])))); @endphp
     @if($outlines)
         <h2 @if($pdf) class="newpage" @endif>Załącznik: struktura nagłówków</h2>
         <div class="muted">Nagłówki tworzą spis treści podstrony – czytają go czytniki ekranu, Google i asystenci AI. Poprawnie: jeden H1 (tytuł), pod nim H2 (działy), pod nimi H3 (podpunkty). Na czerwono zaznaczyliśmy miejsca do poprawy; szare to menu i stopka.</div>
@@ -458,11 +502,13 @@
         @endforeach
     @endif
 
+    @unless($internal)
     <div class="cta">
         <strong style="font-size: 1.2em">Chcesz, żebyśmy to poprawili?</strong><br>
         Przygotujemy plan i wycenę – od poprawek w treści i formularzach po pomiar, bezpieczeństwo, szybkość i nowe funkcje. Pierwsza konsultacja jest bezpłatna.<br>
         <strong>{{ $contact->implode(' · ') ?: $agency }}</strong>
     </div>
+    @endunless
 
     @unless($pdf)
         <div class="footer">Analiza wykonana {{ $audit->finished_at?->format('d.m.Y H:i') }} przez {{ $agency }}. Sprawdzono publicznie dostępne elementy strony.</div>

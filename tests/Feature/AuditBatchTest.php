@@ -186,9 +186,9 @@ class AuditBatchTest extends TestCase
         $this->assertSame('done', $alfa->summary['status'], (string) $alfa->audit->error);
         $this->assertFalse($alfa->audit->options['ai']);
         $pages = collect($alfa->audit->report['pages'])->pluck('label', 'role');
-        $this->assertSame(['home', 'key1', 'key2', 'contact'], $pages->keys()->all(), 'wskazane podstrony zamiast dobranych automatycznie + kontakt');
-        $this->assertSame('Prawo pracy', $pages['key1']);
-        $this->assertSame('Jak zwolnić pracownika', $pages['key2']);
+        $this->assertSame(['home', 'key1', 'key2'], $pages->keys()->all(), 'tylko strona główna i wskazane podstrony');
+        $this->assertSame('Podstrona 1: Prawo pracy', $pages['key1']);
+        $this->assertSame('Podstrona 2: Jak zwolnić pracownika', $pages['key2']);
         $this->assertContains('key1', array_column($alfa->audit->report['sections'], 'key'));
         $this->assertGreaterThan(0, count($alfa->summary['findings']));
 

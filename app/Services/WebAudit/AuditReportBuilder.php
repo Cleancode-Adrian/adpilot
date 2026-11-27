@@ -27,6 +27,12 @@ class AuditReportBuilder
     public function build(WebAudit $audit, array $areas, ?array $inspection, ?array $ai, ?string $inspectionError = null, ?string $blocked = null): array
     {
         $pages = $inspection['pages'] ?? [];
+        foreach ($pages as $role => $p) {
+            // Podstrony z listy klienta (z frazami) – od razu widać w spisie treści, że to one
+            if (str_starts_with($role, 'key') && ! str_starts_with((string) $p['label'], 'Podstrona ')) {
+                $pages[$role]['label'] = 'Podstrona '.substr($role, 3).': '.$p['label'];
+            }
+        }
         $findings = $this->mergeRepeated(array_merge($inspection['findings'] ?? [], $ai['findings'] ?? [], $this->fromAreas($areas, $inspection)), $pages);
 
         // --- sekcje
@@ -85,7 +91,7 @@ class AuditReportBuilder
             'summary' => $ai['summary'] ?? $this->fallbackSummary($counts, count($pages), $all),
             'strengths' => array_values(array_filter($ai['strengths'] ?? $this->fallbackStrengths($areas))),
             'pages' => array_values(array_map(fn ($p) => ['role' => $p['role'], 'label' => $p['label'], 'url' => $p['final_url'] ?? $p['url'], 'title' => $p['title'] ?? null,
-                'ok' => $p['ok'], 'status' => $p['status'], 'outline' => $this->outline($p['headings'] ?? [])], $pages)),
+                'ok' => $p['ok'], 'status' => $p['status'], 'outline' => $this->outline($p['headings'] ?? []), 'seo' => $p['seo_card'] ?? null], $pages)),
             'performance' => [
                 'mobile' => $this->psSummary($areas['speed']['pagespeed'] ?? null),
                 'desktop' => $this->psSummary($areas['speed']['desktop'] ?? null),

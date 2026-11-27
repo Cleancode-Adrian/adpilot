@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditBatch;
 use App\Models\User;
 use App\Models\WebAudit;
 use App\Services\WebAudit\AiPageReviewer;
@@ -14,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /** Szczegółowa analiza strony: wybór podstron, błędy w kodzie, mobile/desktop, przegląd treści AI, raport. */
@@ -385,5 +387,53 @@ class DetailedAuditTest extends TestCase
         $this->assertTrue($titles->has('Puste nagłówki w kodzie'));
         $this->assertStringContainsString('pusty H4 – po nagłówku H2 „Napisz do nas”', $titles['Puste nagłówki w kodzie']['text']);
         $this->assertTrue($titles->has('Obrazy bez opisu (alt) – 2 na tej podstronie'));
+    }
+
+    /** Podstrony z frazami (wskazane w arkuszu): noindex, kilka H1, tytuł bez frazy, artykuł bez linku do oferty, kanibalizacja. */
+    public function test_key_pages_get_keyword_seo_checks(): void
+    {
+        config(['adpilot.pagespeed.enabled' => false]);
+        $page = fn (string $head, string $body) => '<!doctype html><html lang="pl"><head>'.$head.'</head><body><header class="site-header"><nav>'
+            .'<a href="/oferta/prawo-pracy/">Prawo pracy</a><a href="/oferta/planowanie-sukcesji/">Planowanie sukcesji</a><a href="/kontakt/">Kontakt</a></nav></header>'
+            .'<main>'.$body.'</main><footer>GSW</footer></body></html>';
+        $pages = [
+            'https://kancelaria.example' => $page('<title>Kancelaria prawna Kraków | GSW</title><meta name="description" content="'.str_repeat('Obsługa prawna firm. ', 6).'">',
+                '<h1>Kancelaria</h1><p>'.str_repeat('Tekst o kancelarii. ', 30).'</p>'),
+            'https://kancelaria.example/oferta/prawo-pracy' => $page('<title>Usługi | GSW</title><meta name="robots" content="noindex,nofollow">',
+                '<h1>Oferta</h1><h1>Prawo pracy dla pracodawców</h1><p>'.str_repeat('Doradzamy pracodawcom. ', 20).'</p>'),
+            'https://kancelaria.example/publikacje/sukcesja/co-z-firma-po-smierci' => $page('<title>Co z firmą po śmierci przedsiębiorcy – sukcesja | GSW</title>'
+                .'<meta name="description" content="'.str_repeat('Sukcesja firmy rodzinnej krok po kroku. ', 4).'"><link rel="canonical" href="https://kancelaria.example/publikacje/sukcesja/co-z-firma-po-smierci/">',
+                '<article><h1>Co z firmą po śmierci przedsiębiorcy – sukcesja</h1><p>'.str_repeat('Sukcesja firmy po śmierci właściciela wymaga planu. ', 40).'</p>'
+                .'<a href="/publikacje/inne/">Inny artykuł</a></article>'),
+            'https://kancelaria.example/kontakt' => $page('<title>Kontakt | GSW</title>', '<h1>Kontakt</h1><a href="tel:+48123456789">123 456 789</a>'),
+        ];
+        Http::fake(fn (Request $r) => isset($pages[rtrim($r->url(), '/')])
+            ? Http::response($pages[rtrim($r->url(), '/')], 200, ['Content-Type' => 'text/html; charset=UTF-8']) : Http::response('', 404));
+
+        $r = app(PageInspector::class)->inspect('https://kancelaria.example', [
+            'https://kancelaria.example/oferta/prawo-pracy/', 'https://kancelaria.example/publikacje/sukcesja/co-z-firma-po-smierci/',
+        ]);
+        $f = collect($r['findings']);
+        $key1 = $f->where('page', 'key1')->keyBy('title');
+        $this->assertSame('pilne', $key1['Podstrona jest wyłączona z Google (noindex)']['sev']);
+        $this->assertStringContainsString('tylko „Prawo pracy dla pracodawców”, a „Oferta”', $key1['Kilka nagłówków H1 na jednej podstronie']['fix']);
+        $this->assertTrue($key1->has('Tytuł strony nie zawiera frazy z nagłówka H1'));
+        $this->assertTrue($key1->has('Brak opisu strony w Google (meta description)'));
+        $this->assertTrue($key1->has('Mało treści na podstronie ('.$r['pages']['key1']['seo_card']['words'].' słów)'));
+        $this->assertSame('Prawo pracy dla pracodawców', $r['pages']['key1']['seo_card']['phrase']);
+
+        $key2 = $f->where('page', 'key2')->keyBy('title');
+        $this->assertSame('artykuł', $r['pages']['key2']['seo_card']['kind']);
+        $this->assertStringContainsString('planowanie-sukcesji', $key2['Artykuł nie prowadzi do oferty']['fix']);
+        $this->assertTrue($key2->has('Artykuł bez autora i daty publikacji'));
+        $this->assertFalse($key2->has('Brak adresu kanonicznego (canonical)'));
+        $this->assertFalse($key2->has('Podstrona jest wyłączona z Google (noindex)'));
+
+        // raport wewnętrzny: karta SEO podstrony, bez propozycji rozbudowy
+        $audit = WebAudit::create(['url' => 'https://kancelaria.example', 'status' => 'done', 'token' => Str::random(40), 'score' => 70, 'areas' => [],
+            'audit_batch_id' => AuditBatch::create(['name' => 'Lista', 'token' => Str::random(40), 'status' => 'done'])->id]);
+        $audit->update(['report' => app(AuditReportBuilder::class)->build($audit, [], $r, null)]);
+        $this->get(route('public.web-audit', $audit->token))->assertOk()
+            ->assertSee('NOINDEX – niewidoczna w Google')->assertSee('raport wewnętrzny')->assertDontSee('Propozycje rozbudowy')->assertDontSee('Chcesz, żebyśmy to poprawili?');
     }
 }

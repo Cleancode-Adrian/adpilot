@@ -96,7 +96,7 @@ class WebAuditor
         // Strona główna nie działa i nie udało się pobrać żadnej podstrony – nie wystawiamy oceny stronie błędu
         $dead = ! $inspection && ! $blocked && (int) ($areas['seo']['summary']['html_pages'] ?? 0) === 0;
         if (! $scores || $dead) {
-            $audit->update(['status' => 'failed', 'areas' => $areas, 'finished_at' => now(),
+            $audit->update(['status' => 'failed', 'score' => null, 'areas' => $areas, 'finished_at' => now(),
                 'error' => match (true) {
                     (bool) $blocked => 'Serwer strony pokazuje naszemu skanerowi ekran weryfikacji ('.$blocked.') zamiast treści – to zabezpieczenie hostingu przed automatami, nie błąd widoczny dla klientów. Spróbuj ponownie za kilkanaście minut albo poproś o dodanie adresu IP serwera AdPilot do wyjątków zabezpieczenia.',
                     $dead => 'Strona nie działa – '.lcfirst(rtrim((string) $inspectionError, '.')).'. Sprawdź adres albo ponów audyt, gdy strona wróci.',

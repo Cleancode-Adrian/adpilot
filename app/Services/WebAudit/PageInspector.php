@@ -122,9 +122,8 @@ class PageInspector
             }
         }
         if ($keys) {
-            // Wskazane podstrony + kontakt (formularz i dane firmy), jeśli nie ma go wśród wskazanych
-            $contact = $candidates['contact'] ?? null;
-            $toFetch = $keys + ($contact && ! array_filter($keys, fn ($k) => $this->sameUrl($k, $contact)) ? ['contact' => $contact] : []);
+            // Wskazane podstrony: tylko strona główna + te podstrony (bez dokładania kontaktu / oferty)
+            $toFetch = $keys;
         }
         foreach ($this->withRendered($this->fetch(array_values($toFetch))) as $u => $res) {
             $role = array_search($u, $toFetch, true);
@@ -159,7 +158,11 @@ class PageInspector
         $this->checkLanguage($ok);
         foreach ($ok as $role => $p) {
             $this->checkPage($role, $p);
+            if ($role === 'home' || $role === 'detail' || str_starts_with($role, 'key')) {
+                $pages[$role]['seo_card'] = $this->checkSeo($role, $p, $ok);
+            }
         }
+        $this->checkCannibal(array_filter($pages, fn ($p) => ! empty($p['seo_card']['phrase']) && $p['role'] !== 'home'));
         $this->checkCrossPage($ok);
         $this->checkMobile($ok);
 
@@ -276,7 +279,7 @@ class PageInspector
             }
             $out[$u] = ['url' => $u, 'final_url' => $history ? end($history) : $u, 'status' => $r->status(), 'ok' => $r->successful() && $isHtml,
                 'body' => $isHtml ? $r->body() : '', 'error' => null, 'cookies' => array_values(array_unique(array_filter($cookies))),
-                'headers' => array_intersect_key($headers, array_flip(['content-encoding', 'x-encoded-content-encoding', 'cache-control', 'server', 'x-cache', 'cf-cache-status', 'x-litespeed-cache',
+                'headers' => array_intersect_key($headers, array_flip(['content-encoding', 'x-encoded-content-encoding', 'cache-control', 'server', 'x-cache', 'cf-cache-status', 'x-litespeed-cache', 'x-robots-tag',
                     'x-proxy-cache', 'x-wp-super-cache', 'x-rocket-nginx-serving-static', 'x-nginx-cache', 'x-sucuri-cache', 'age', 'content-type'])),
                 // Sam czas pracy serwera: od wysłania zapytania do pierwszego bajtu (bez DNS, łączenia i szyfrowania po naszej stronie)
                 'ttfb_ms' => isset($stats['starttransfer_time']) && $stats['starttransfer_time'] > 0
@@ -486,6 +489,7 @@ class PageInspector
             ];
         }
 
+        $seoFacts = $this->seoFacts($x, $meta, $res);
         $text = $this->visibleText($dom, $role === 'home');
 
         $title = $this->clean((string) ($x->query('//title')->item(0)?->textContent ?? ''));
@@ -517,6 +521,7 @@ class PageInspector
             'header_blocks' => $headerBlocks,
             'footer_links' => array_values(array_unique(array_filter(array_map(fn ($l) => $l['zone'] === 'footer' ? $l['text'] : null, $links)))),
             'text' => $text,
+            'seo' => $seoFacts + ['words' => $this->contentWords($text)],
             'raw' => $res['body'],
             'rendered' => isset($res['rendered']),
         ];
@@ -595,7 +600,7 @@ class PageInspector
         foreach ($nodes as $n) {
             /** @var DOMElement $n */
             $zone = $this->zone($n);
-            if (! $withChrome && in_array($zone, ['header', 'nav', 'footer'], true)) {
+            if ($this->isConsent($n) || (! $withChrome && in_array($zone, ['header', 'nav', 'footer'], true))) {
                 continue;
             }
             if ($n->nodeName === 'tr') {
@@ -944,9 +949,13 @@ class PageInspector
                     : 'Dodać na górze podstrony H1 z jej tematem'.($title !== '' ? ', np. „'.mb_strimwidth($title, 0, 60, '…').'”' : '').'.',
                 $first ? 'H'.$first['level'].' „'.mb_strimwidth($first['text'], 0, 80, '…').'” → H1' : null, [$url]);
         } elseif (count($h1) > 1) {
-            $this->add($role, 'page', 'Struktura nagłówków', 'drobne', 'Kilka nagłówków H1 na jednej podstronie',
-                'Podstrona ma '.count($h1).' nagłówki H1: „'.implode('”, „', array_map(fn ($h) => mb_strimwidth($h['text'], 0, 60, '…'), array_slice($h1, 0, 4))).'”. Główny temat strony się rozmywa.',
-                'Zostawić jeden H1 (główny tytuł), pozostałe zmienić na H2.', null, [$url]);
+            $keep = $this->mainH1($h1, (string) ($p['title'] ?? ''), $url);
+            $others = array_values(array_filter($h1, fn ($h) => $h['text'] !== $keep['text']));
+            $this->add($role, 'page', 'Struktura nagłówków', $role === 'home' ? 'drobne' : 'srednie', 'Kilka nagłówków H1 na jednej podstronie',
+                'Podstrona ma '.count($h1).' nagłówki H1: „'.implode('”, „', array_map(fn ($h) => mb_strimwidth($h['text'], 0, 60, '…'), array_slice($h1, 0, 4))).'”. Google nie wie, który z nich jest tematem strony – fraza z właściwego tytułu traci na sile.',
+                'Zostawić jako H1 tylko „'.mb_strimwidth($keep['text'], 0, 110, '…').'”, a '.implode(', ', array_map(fn ($h) => '„'.mb_strimwidth($h['text'], 0, 40, '…').'”', array_slice($others, 0, 3)))
+                .' zmienić na zwykły tekst (np. okruszki nawigacji / nadtytuł) albo H2.',
+                implode("\n", array_map(fn ($h) => 'H1 „'.mb_strimwidth($h['text'], 0, 70, '…').'”'.($h['text'] === $keep['text'] ? ' ← zostawić' : ' → zwykły tekst / H2'), array_slice($h1, 0, 5))), [$url]);
         } elseif ($main && $main[0]['level'] !== 1 && $h1[0]['zone'] === 'main') {
             $before = array_slice(array_filter($main, fn ($h) => $h['level'] > 1), 0, 2);
             $this->add($role, 'page', 'Struktura nagłówków', 'drobne', 'Nagłówek H1 nie jest pierwszy',
@@ -1205,9 +1214,439 @@ class PageInspector
         }
     }
 
+    // ------------------------------------------------------------------ SEO podstron z frazami kluczowymi
+
+    private const STOP_WORDS = ['oraz', 'jest', 'się', 'dla', 'czy', 'jak', 'jaki', 'jaka', 'jakie', 'the', 'and', 'for', 'with', 'nasz', 'nasza', 'nasze', 'naszej', 'twój', 'twoja',
+        'strona', 'główna', 'home', 'witamy', 'www', 'com', 'przez', 'nie', 'tak', 'ich', 'jego', 'jej', 'tym', 'też', 'także', 'które', 'który', 'która', 'po', 'od', 'do', 'na', 'ze', 'we'];
+
+    /** H1, które nic nie mówią o temacie podstrony (nazwa działu zamiast tytułu). */
+    private const GENERIC_H1 = '/^(oferta|nasza oferta|usługi|uslugi|nasze usługi|publikacje|blog|aktualności|aktualnosci|artykuły|artykuly|news|produkty|kategorie|sklep|zespół|o nas|kontakt|realizacje|portfolio|start|witamy|strona główna|home|wpis|porady|baza wiedzy|wiedza)$/iu';
+
+    /** Fakty SEO z kodu podstrony (przed usunięciem skryptów – potrzebny JSON-LD). */
+    private function seoFacts(DOMXPath $x, callable $meta, array $res): array
+    {
+        $types = [];
+        $dates = [];
+        $authors = [];
+        $walk = function ($node) use (&$walk, &$types, &$dates, &$authors) {
+            if (! is_array($node)) {
+                return;
+            }
+            foreach ((array) ($node['@type'] ?? []) as $t) {
+                if (is_string($t)) {
+                    $types[] = $t;
+                }
+            }
+            foreach (['datePublished', 'dateModified'] as $k) {
+                if (! empty($node[$k]) && is_string($node[$k])) {
+                    $dates[] = $node[$k];
+                }
+            }
+            if (! empty($node['author'])) {
+                $list = is_string($node['author']) || isset($node['author']['name']) || isset($node['author']['@id']) ? [$node['author']] : (array) $node['author'];
+                foreach ($list as $a) {
+                    $n = is_string($a) ? $a : ($a['name'] ?? (isset($a['@id']) ? 'osoba' : null));
+                    if (is_string($n) && trim($n) !== '') {
+                        $authors[] = trim($n);
+                    }
+                }
+            }
+            foreach ($node as $k => $v) {
+                if (is_array($v) && $k !== 'author') {
+                    $walk($v);
+                }
+            }
+        };
+        foreach ($x->query('//script[@type="application/ld+json"]') as $s) {
+            $walk(json_decode(trim($s->textContent), true));
+        }
+        foreach ($x->query('//*[@itemtype]/@itemtype') as $it) {
+            $types[] = basename((string) $it->nodeValue);
+        }
+        foreach (['article:published_time', 'article:modified_time'] as $prop) {
+            if (($v = $meta('property', $prop)) !== '') {
+                $dates[] = $v;
+            }
+        }
+        foreach ($x->query('//time/@datetime') as $t) {
+            $dates[] = (string) $t->nodeValue;
+        }
+        if (($v = $meta('name', 'author')) !== '') {
+            $authors[] = $v;
+        }
+        foreach ($x->query('//a[@rel="author"] | //*[contains(concat(" ",normalize-space(@class)," ")," author ") or contains(@class,"author-name") or contains(@class,"entry-author") or contains(@class,"post-author") or contains(@class,"byline")]') as $a) {
+            $t = $this->clean($a->textContent);
+            if ($t !== '' && mb_strlen($t) < 80) {
+                $authors[] = $t;
+            }
+        }
+        // pierwszy akapit treści
+        $first = '';
+        foreach ($x->query('//p') as $pn) {
+            $t = $this->clean($pn->textContent);
+            if (mb_strlen($t) >= 80 && $this->zone($pn) === 'main' && ! $this->isConsent($pn, $t)) {
+                $first = mb_substr($t, 0, 400);
+                break;
+            }
+        }
+        $robots = trim(mb_strtolower($meta('name', 'robots').' '.$meta('name', 'googlebot').' '.($res['headers']['x-robots-tag'] ?? '')));
+        $canonical = trim((string) ($x->query("//link[translate(@rel,'CANONICAL','canonical')='canonical']/@href")->item(0)?->nodeValue ?? ''));
+        $types = array_values(array_unique($types));
+
+        return [
+            'canonical' => $canonical !== '' ? ($this->absolute($canonical, $res['final_url']) ?? $canonical) : '',
+            'noindex' => str_contains($robots, 'noindex'),
+            'types' => $types,
+            'dates' => array_values(array_unique(array_slice($dates, 0, 5))),
+            'authors' => array_values(array_unique(array_slice($authors, 0, 5))),
+            'og_type' => $meta('property', 'og:type'),
+            'breadcrumbs' => in_array('BreadcrumbList', $types, true) || $x->query('//*[contains(@class,"breadcrumb") or @aria-label="breadcrumb" or @aria-label="Breadcrumb" or contains(@id,"breadcrumb")]')->length > 0,
+            'first_paragraph' => $first,
+        ];
+    }
+
+    /** Liczba słów właściwej treści (bez menu, stopki, przycisków). */
+    private function contentWords(string $text): int
+    {
+        $n = 0;
+        foreach (explode("\n", $text) as $line) {
+            if (preg_match('/^\[(menu|stopka|przycisk\/link|opcja)\]/u', $line)) {
+                continue;
+            }
+            $n += count(preg_split('/\s+/u', trim(preg_replace('/^(#+|-|\[wiersz tabeli\])\s*/u', '', $line)), -1, PREG_SPLIT_NO_EMPTY));
+        }
+
+        return $n;
+    }
+
+    /** @return list<string> znaczące słowa (małe litery, bez krótkich i pomocniczych) */
+    private function words(string $s): array
+    {
+        preg_match_all('/\p{L}[\p{L}\p{N}]*/u', mb_strtolower($s), $m);
+
+        return array_values(array_unique(array_filter($m[0], fn ($w) => mb_strlen($w) >= 3 && ! in_array($w, self::STOP_WORDS, true))));
+    }
+
+    /** Rdzeń słowa – po polsku odmiana zmienia końcówkę („prawo pracy” = „prawa pracy”). */
+    private function stem(string $w): string
+    {
+        $l = mb_strlen($w);
+
+        return mb_substr($w, 0, $l <= 4 ? $l : max(4, $l - 3));
+    }
+
+    /** Jaka część słów frazy występuje w tekście (0–1). */
+    private function coverage(array $phrase, string $text): float
+    {
+        if (! $phrase) {
+            return 1.0;
+        }
+        $hay = ' '.implode(' ', $this->words($text));
+        $hit = count(array_filter($phrase, fn ($w) => str_contains($hay, ' '.$this->stem($w))));
+
+        return $hit / count($phrase);
+    }
+
+    /** Który z kilku H1 jest właściwym tytułem: najbardziej zgodny z tytułem strony i adresem, nie nazwa działu. */
+    private function mainH1(array $h1, string $title, string $url): array
+    {
+        $ref = $title.' '.str_replace(['-', '_', '/', ','], ' ', rawurldecode((string) parse_url($url, PHP_URL_PATH)));
+        usort($h1, fn ($a, $b) => [(int) preg_match(self::GENERIC_H1, $a['text']), -$this->coverage($this->words($a['text']), $ref), -mb_strlen($a['text'])]
+            <=> [(int) preg_match(self::GENERIC_H1, $b['text']), -$this->coverage($this->words($b['text']), $ref), -mb_strlen($b['text'])]);
+
+        return $h1[0];
+    }
+
+    private function brandName(array $pages): string
+    {
+        $home = $pages['home'] ?? [];
+        if (! empty($home['og_site_name'])) {
+            return $home['og_site_name'];
+        }
+        $parts = preg_split('/\s+[–—|»·-]\s+/u', (string) ($home['title'] ?? ''));
+
+        return trim((string) (count($parts) > 1 ? end($parts) : ''));
+    }
+
+    /**
+     * SEO podstrony pod frazę kluczową: tytuł, opis, H1, indeksowanie, treść, linkowanie, wezwanie do kontaktu, dane strukturalne.
+     * Fraza = temat podstrony z H1 (albo z tytułu, gdy H1 jest ogólny). Zwraca kartę z faktami do raportu.
+     */
+    private function checkSeo(string $role, array $p, array $pages): array
+    {
+        $url = $p['final_url'];
+        $s = $p['seo'] ?? [];
+        $home = $role === 'home';
+        $g = 'SEO i fraza kluczowa';
+        $path = rawurldecode((string) parse_url($url, PHP_URL_PATH)).' '.rawurldecode((string) parse_url($url, PHP_URL_QUERY));
+        $isArticle = (bool) array_intersect($s['types'] ?? [], ['Article', 'BlogPosting', 'NewsArticle'])
+            || preg_match('~/(blog|publikacj|artyku|aktualnos|porad|wpis|news|baza-wiedzy|wiedza)|,article,~iu', $path);
+        $isProduct = ! $isArticle && (in_array('Product', $s['types'] ?? [], true) || preg_match('~/(produkt|product)/|productView|/p/\d~i', $path) || ($s['og_type'] ?? '') === 'product');
+        $isCategory = ! $isArticle && ! $isProduct && preg_match('~kategori|category|categoryView|/sklep/~i', $path);
+        $kind = $home ? 'strona główna' : ($isArticle ? 'artykuł' : ($isProduct ? 'produkt' : ($isCategory ? 'kategoria' : 'oferta / usługa')));
+
+        $h1s = array_values(array_filter($p['headings'], fn ($h) => $h['level'] === 1 && ! $h['empty']));
+        $h1 = $h1s ? $this->mainH1($h1s, (string) $p['title'], $url)['text'] : '';
+        $titleMain = trim((string) preg_split('/\s+[–—|»·]\s+|\s+-\s+/u', (string) $p['title'])[0]);
+        $source = $h1 !== '' && ! preg_match(self::GENERIC_H1, $h1) && ! $home ? $h1 : $titleMain;
+        $phrase = array_slice($this->words($source), 0, 6);
+        $phraseText = mb_strimwidth($source, 0, 80, '…');
+        $brand = $this->brandName($pages);
+        $short = trim((string) (count($segs = preg_split('/\s+[–—|»·]\s+|\s+-\s+/u', (string) $p['title'])) > 1 ? end($segs) : ''));
+        $brandShort = $short !== '' && mb_strlen($short) <= 30 ? $short : $brand;
+        $full = $source.($brandShort !== '' && mb_stripos($source, $brandShort) === false ? ' – '.$brandShort : '');
+        $suggestTitle = $source !== '' && mb_strlen($full) <= 62 ? $full : null; // nie proponujemy tytułu uciętego w pół słowa
+        $words = (int) ($s['words'] ?? 0);
+
+        // 1. Indeksowanie
+        if (! empty($s['noindex'])) {
+            $this->add($role, 'page', $g, 'pilne', 'Podstrona jest wyłączona z Google (noindex)',
+                'Kod podstrony (meta robots lub nagłówek serwera) każe Google nie pokazywać jej w wynikach. Na frazę z tej podstrony strona nie ma szans się pozycjonować.',
+                'Usunąć „noindex” (WordPress: Yoast/Rank Math → ustawienia podstrony → „Pozwól wyszukiwarkom pokazywać”), chyba że to celowe.', null, [$url]);
+        }
+        $canonical = (string) ($s['canonical'] ?? '');
+        $canonOther = $canonical !== '' && ! $this->sameUrl(preg_replace('/[?#].*$/', '', $canonical), preg_replace('/[?#].*$/', '', $url));
+        if ($canonOther) {
+            $this->add($role, 'page', $g, 'pilne', 'Adres kanoniczny wskazuje inną podstronę',
+                'Podstrona mówi Google, że jej „właściwa” wersja jest pod innym adresem – Google pokaże tamten adres zamiast tego, a ta podstrona nie będzie się pozycjonować.',
+                'Ustawić canonical na własny adres podstrony (wtyczka SEO → zaawansowane → adres kanoniczny) albo zostawić puste pole.', 'canonical: '.$canonical, [$url]);
+        } elseif ($canonical === '' && ! $home) {
+            $this->add($role, 'page', $g, 'drobne', 'Brak adresu kanonicznego (canonical)',
+                'Podstrona nie wskazuje swojego adresu kanonicznego. Gdy ten sam tekst jest dostępny pod kilkoma adresami (parametry, wersja z „/” i bez), Google sam wybiera, który pokazać.',
+                'Włączyć canonical we wtyczce SEO (Yoast / Rank Math robią to automatycznie).', null, [$url]);
+        }
+
+        // 2. Tytuł strony (title)
+        $title = (string) $p['title'];
+        $tl = mb_strlen($title);
+        if ($title === '') {
+            $this->add($role, 'page', $g, 'pilne', 'Brak tytułu strony (title)', 'Podstrona nie ma tytułu – to najważniejszy tekst w wynikach Google i główne miejsce na frazę.',
+                'Dodać tytuł'.($suggestTitle ? ', np. „'.$suggestTitle.'”' : '').'.', null, [$url]);
+        } else {
+            $brandTwice = $brandShort !== '' && mb_substr_count(mb_strtolower($title), mb_strtolower($brandShort)) >= 2;
+            if ($tl > 65) {
+                $this->add($role, 'page', $g, 'srednie', 'Tytuł za długi – Google go utnie ('.$tl.' znaków)',
+                    'Google pokazuje ok. 55–60 znaków tytułu, reszta jest ucinana „…”. Fraza i nazwa firmy powinny zmieścić się na początku.'
+                    .($brandTwice ? ' Nazwa firmy („'.$brandShort.'”) jest w tytule dwa razy – zwykle wtyczka SEO dopisuje ją do tytułu, który już ją zawiera.' : ''),
+                    $suggestTitle && $suggestTitle !== $title
+                        ? 'Skrócić do 50–60 znaków, np. „'.$suggestTitle.'”.'
+                        : 'Skrócić do 50–60 znaków: najważniejsza fraza na początku (4–6 słów, np. pierwsza część pytania), na końcu krótka nazwa firmy'.($brandTwice ? ' – tylko raz' : '').'. We wtyczce SEO można ustawić osobny „tytuł SEO”, a długi nagłówek zostawić na stronie.',
+                    $title, [$url]);
+            } elseif ($brandTwice) {
+                $this->add($role, 'page', $g, 'drobne', 'Nazwa firmy powtórzona w tytule',
+                    'Tytuł „'.$title.'” zawiera nazwę „'.$brandShort.'” dwa razy – marnuje miejsce w wynikach Google.', 'Zostawić nazwę firmy raz, na końcu (szablon tytułu we wtyczce SEO).', null, [$url]);
+            } elseif ($tl < 30 && ! $home) {
+                $this->add($role, 'page', $g, 'srednie', 'Tytuł za krótki ('.$tl.' znaków)',
+                    'Tytuł „'.$title.'” nie wykorzystuje miejsca w wynikach Google – nie mówi, czego dokładnie dotyczy strona ani kto ją prowadzi.',
+                    'Rozbudować do 50–60 znaków: fraza + wyróżnik (miasto, korzyść) + nazwa firmy'.($suggestTitle && $suggestTitle !== $title ? ', np. „'.$suggestTitle.'”' : '').'.', null, [$url]);
+            }
+            if (! $home && $phrase && $source !== $titleMain && $this->coverage($phrase, $title) < 0.5) {
+                $this->add($role, 'page', $g, 'srednie', 'Tytuł strony nie zawiera frazy z nagłówka H1',
+                    'Nagłówek mówi „'.$phraseText.'”, a tytuł w Google to „'.$title.'”. Tytuł to najsilniejszy sygnał dla Google – fraza, na którą ma się pozycjonować podstrona, powinna w nim być, najlepiej na początku.',
+                    'Ustawić tytuł z frazą na początku'.($suggestTitle ? ', np. „'.$suggestTitle.'”' : '').'.', null, [$url]);
+            }
+        }
+
+        // 3. Opis (meta description)
+        $desc = (string) ($p['description'] ?? '');
+        $dl = mb_strlen($desc);
+        if ($desc === '') {
+            $this->add($role, 'page', $g, 'srednie', 'Brak opisu strony w Google (meta description)',
+                'Bez opisu Google sam wybiera przypadkowy fragment tekstu do wyników wyszukiwania – zwykle mniej zachęcający do kliknięcia.',
+                'Dodać opis 140–160 znaków: fraza'.($phrase && mb_strlen($source) <= 60 ? ' („'.$source.'”)' : '').', konkretna korzyść i zachęta (np. „Umów konsultację”). Wtyczka SEO → opis meta.', null, [$url]);
+        } else {
+            if ($dl > 170) {
+                $this->add($role, 'page', $g, 'drobne', 'Opis w Google za długi ('.$dl.' znaków)', 'Google pokazuje ok. 155–160 znaków opisu – końcówka zostanie ucięta.',
+                    'Skrócić do 140–160 znaków, najważniejsze na początku.', $desc, [$url]);
+            } elseif ($dl < 70) {
+                $this->add($role, 'page', $g, 'drobne', 'Opis w Google za krótki ('.$dl.' znaków)', 'Opis „'.$desc.'” nie wykorzystuje miejsca w wynikach wyszukiwania.',
+                    'Rozbudować do 140–160 znaków z frazą i zachętą do kliknięcia.', null, [$url]);
+            }
+            if (! $home && $phrase && $this->coverage($phrase, $desc) < 0.5) {
+                $this->add($role, 'page', $g, 'drobne', 'Opis w Google nie zawiera frazy podstrony',
+                    'Google pogrubia w opisie słowa, których szukał klient. Opis „'.mb_strimwidth($desc, 0, 120, '…').'” nie zawiera frazy „'.$phraseText.'”.',
+                    'Dopisać frazę do opisu (naturalnie, w pierwszym zdaniu).', null, [$url]);
+            }
+        }
+
+        // 4. Nagłówek H1 ogólny („Oferta”, „Publikacje”) zamiast tematu
+        if (! $home && count($h1s) === 1 && preg_match(self::GENERIC_H1, $h1)) {
+            $this->add($role, 'page', $g, 'srednie', 'Nagłówek H1 to nazwa działu, a nie temat podstrony',
+                'Jedyny H1 to „'.$h1.'” – nie mówi, czego dotyczy podstrona. Dla Google H1 to drugi po tytule sygnał, na jaką frazę pokazywać stronę.',
+                'Ustawić jako H1 właściwy temat'.($titleMain !== '' ? ', np. „'.mb_strimwidth($titleMain, 0, 70, '…').'”' : '').', a „'.$h1.'” zostawić jako zwykły tekst / okruszki.', null, [$url]);
+        }
+
+        if (! $home) {
+            // 5. Ilość treści
+            [$min, $sevThin] = match ($kind) { 'artykuł' => [600, 'srednie'], 'produkt' => [120, 'drobne'], 'kategoria' => [150, 'srednie'], default => [300, 'srednie'] };
+            if ($words > 0 && $words < $min) {
+                $this->add($role, 'page', $g, $sevThin, 'Mało treści na podstronie ('.$words.' słów)',
+                    match ($kind) {
+                        'artykuł' => 'Artykuł ma ok. '.$words.' słów. Artykuły, które wygrywają w Google i są cytowane przez asystentów AI, zwykle wyczerpująco odpowiadają na pytanie (800–1500 słów, przykłady, kroki, FAQ).',
+                        'kategoria' => 'Kategoria ma ok. '.$words.' słów tekstu poza listą produktów. Bez opisu Google ma mało podstaw, żeby pokazać ją na frazę ogólną (np. nazwę kategorii).',
+                        'produkt' => 'Karta produktu ma ok. '.$words.' słów – sam opis producenta lub kilka parametrów. Takie same opisy mają inne sklepy, więc Google nie ma powodu wybrać tej strony.',
+                        default => 'Podstrona usługi ma ok. '.$words.' słów. Na frazę usługową wygrywają strony, które odpowiadają na pytania klienta: dla kogo, jak wygląda współpraca, ile trwa, ile kosztuje, dlaczego wy, FAQ.',
+                    },
+                    match ($kind) {
+                        'artykuł' => 'Rozbudować artykuł: odpowiedź w pierwszym akapicie, śródtytuły H2 z pytaniami, przykłady, podsumowanie i FAQ.',
+                        'kategoria' => 'Dodać pod listą produktów opis kategorii (150–300 słów): dla kogo, jak wybrać, najważniejsze parametry, link do poradnika.',
+                        'produkt' => 'Napisać własny opis: zastosowanie, zalety, parametry w tabeli, pytania klientów.',
+                        default => 'Rozbudować do min. 400–600 słów: sekcje H2 (zakres usługi, proces, dla kogo, cena/wycena, FAQ), konkretne przykłady i wezwanie do kontaktu.',
+                    }, null, [$url]);
+            }
+
+            // 6. Fraza w pierwszym akapicie i w śródtytułach
+            $first = (string) ($s['first_paragraph'] ?? '');
+            if ($phrase && $first !== '' && $this->coverage($phrase, $first) < 0.5 && ! $isProduct) {
+                $this->add($role, 'page', $g, 'drobne', 'Pierwszy akapit nie mówi wprost o temacie podstrony',
+                    'Pierwszy akapit nie zawiera frazy „'.$phraseText.'”. Google i asystenci AI najmocniej biorą pod uwagę początek tekstu – tam powinna paść fraza i krótka odpowiedź, czego dotyczy strona.',
+                    'Przeredagować pierwsze zdanie tak, żeby zawierało frazę.', mb_strimwidth($first, 0, 200, '…'), [$url]);
+            }
+            $h2 = array_values(array_filter($p['headings'], fn ($h) => $h['level'] === 2 && ! $h['empty'] && $h['zone'] === 'main'));
+            if (! $h2 && $words >= 300 && ! $isProduct) {
+                $this->add($role, 'page', $g, 'srednie', 'Brak śródtytułów H2 w treści',
+                    'Tekst (ok. '.$words.' słów) nie jest podzielony śródtytułami H2. Google i asystenci AI czytają H2 jak spis treści – bez nich trudniej wyciągnąć odpowiedzi i powiązane frazy.',
+                    'Podzielić tekst na sekcje z H2 – najlepiej w formie pytań klientów (np. „Ile kosztuje…”, „Jak wygląda…”).', null, [$url]);
+            } elseif ($h2 && $phrase && count($h2) >= 2 && ! array_filter($h2, fn ($h) => $this->coverage($phrase, $h['text']) > 0)) {
+                $this->add($role, 'page', $g, 'drobne', 'Śródtytuły H2 nie nawiązują do frazy podstrony',
+                    'Żaden z H2 („'.implode('”, „', array_map(fn ($h) => mb_strimwidth($h['text'], 0, 40, '…'), array_slice($h2, 0, 3))).'”) nie zawiera słów z frazy „'.$phraseText.'”.',
+                    'W 1–2 śródtytułach użyć frazy lub jej odmian (np. pytania, które klient wpisuje w Google).', null, [$url]);
+            }
+
+            // 7. Linkowanie wewnętrzne z treści
+            $inMain = array_filter($p['links'], fn ($l) => $l['internal'] && $l['zone'] === 'main' && $l['abs'] && ! $this->sameUrl(preg_replace('/#.*$/', '', $l['abs']), $url)
+                && ! preg_match('~\.(jpe?g|png|webp|gif|pdf|svg)(\?|$)|/wp-content/uploads/~i', $l['abs']));
+            $targets = array_values(array_unique(array_map(fn ($l) => preg_replace('/#.*$/', '', $l['abs']), $inMain)));
+            if (! $targets) {
+                $this->add($role, 'page', $g, 'srednie', 'Z treści podstrony nie ma linków do innych podstron',
+                    'W tekście nie ma ani jednego linku do innych podstron (są tylko w menu i stopce). Linki w treści pokazują Google, jak tematy się łączą, i prowadzą klienta dalej – do oferty, kontaktu, powiązanych artykułów.',
+                    $isArticle ? 'Dodać w tekście 2–4 linki: do strony usługi, której dotyczy artykuł, i do powiązanych artykułów.' : 'Dodać w tekście linki do powiązanych usług, artykułów (poradników) i kontaktu.', null, [$url]);
+            } elseif ($isArticle && ! array_filter($targets, fn ($t) => preg_match(self::OFFER_URL, rawurldecode($t)))) {
+                $match = $this->matchingOffer($pages, $path.' '.$source);
+                $this->add($role, 'page', $g, 'srednie', 'Artykuł nie prowadzi do oferty',
+                    'Z treści artykułu nie ma linku do strony usługi (są tylko linki do innych artykułów, kategorii lub w menu). Czytelnik, który ma problem opisany w artykule, nie dostaje podpowiedzi, że firma może w nim pomóc – a Google nie widzi powiązania artykułu z ofertą.',
+                    'Dodać w tekście (i na końcu, w ramce „Potrzebujesz pomocy?”) link do usługi'.($match ? ' – pasuje „'.$match['text'].'” ('.$match['url'].')' : '').' z zachętą do kontaktu.', null, [$url]);
+            }
+
+            // 8. Czy strona główna prowadzi do podstrony (oferta, kategoria)
+            if (str_starts_with($role, 'key') && ! $isArticle && ! $isProduct && isset($pages['home'])
+                && ! array_filter($pages['home']['links'], fn ($l) => $l['abs'] && $this->sameUrl(preg_replace('/#.*$/', '', $l['abs']), $url))) {
+                $this->add($role, 'page', $g, 'srednie', 'Strona główna nie linkuje do tej podstrony',
+                    'Ani menu, ani treść strony głównej nie prowadzą do tej podstrony. Strona główna ma największą „moc” w Google – podstrony podlinkowane z niej są ważniejsze i szybciej odwiedzane przez Google; klient też łatwiej ją znajdzie.',
+                    'Dodać link w menu (podmenu oferty) albo w sekcji usług na stronie głównej.', null, [$url]);
+            }
+
+            // 9. Wezwanie do kontaktu (usługi, kategorie)
+            if (! $isArticle && ! $isProduct && ! $isCategory) {
+                $cta = array_filter($p['links'], fn ($l) => $l['zone'] === 'main' && (preg_match('/^(tel:|mailto:)/i', $l['href']) || preg_match(self::ROLE_PATTERNS['contact'], $l['href'].' '.$l['text'])
+                    || preg_match('/umów|umow|zadzwo|napisz|zapytaj|wycen|konsultac|skontaktuj|formularz|zamów|zamow|kup/iu', $l['text'])));
+                $forms = array_filter($p['forms'], fn ($f) => count($f['fields']) >= 2);
+                if (! $cta && ! $forms) {
+                    $this->add($role, 'page', $g, 'srednie', 'W treści podstrony nie ma wezwania do kontaktu',
+                        'Klient, który przeczyta opis usługi, nie ma pod ręką przycisku „Umów konsultację”, telefonu ani formularza – musi go szukać w menu. Ruch z Google na tę podstronę gorzej zamienia się w zapytania.',
+                        'Dodać w treści (po opisie i na końcu) przycisk kontaktu, klikalny telefon i/lub krótki formularz.', null, [$url]);
+                }
+            }
+
+            // 10. Artykuły: autor i data (wiarygodność – ważne zwłaszcza w prawie, finansach, zdrowiu)
+            if ($isArticle) {
+                $miss = array_filter(['autora' => empty($s['authors']), 'daty publikacji' => empty($s['dates'])]);
+                if ($miss) {
+                    $this->add($role, 'page', $g, 'srednie', 'Artykuł bez '.implode(' i ', array_keys($miss)),
+                        'W kodzie artykułu nie ma '.implode(' ani ', array_keys($miss)).'. Google przy tematach prawnych, finansowych i zdrowotnych szczególnie ocenia, kto napisał tekst i czy jest aktualny (E-E-A-T) – to samo sprawdzają asystenci AI, wybierając źródła.',
+                        'Pokazać autora (imię, nazwisko, tytuł zawodowy, link do biogramu) i datę publikacji/aktualizacji; dodać je też w danych strukturalnych Article.', null, [$url]);
+                }
+                if (! array_intersect($s['types'] ?? [], ['Article', 'BlogPosting', 'NewsArticle'])) {
+                    $this->add($role, 'page', $g, 'drobne', 'Artykuł bez danych strukturalnych Article',
+                        'Kod nie oznacza podstrony jako artykułu (schema.org Article / BlogPosting) – Google nie dostaje jasnej informacji o autorze, dacie i temacie.',
+                        'Włączyć typ „Artykuł” we wtyczce SEO (Yoast / Rank Math: Schema → Article).', null, [$url]);
+                }
+            }
+            if ($isProduct && ! in_array('Product', $s['types'] ?? [], true)) {
+                $this->add($role, 'page', $g, 'srednie', 'Karta produktu bez danych strukturalnych Product',
+                    'Kod nie opisuje produktu (schema.org Product z ceną i dostępnością) – Google nie pokaże ceny ani dostępności w wynikach i w zakładce Zakupy.',
+                    'Włączyć dane strukturalne produktu w sklepie / wtyczce SEO (nazwa, cena, waluta, dostępność, zdjęcie).', null, [$url]);
+            }
+            if (empty($s['breadcrumbs'])) {
+                $this->add($role, 'page', $g, 'drobne', 'Brak okruszków nawigacji (breadcrumbs)',
+                    'Podstrona nie ma ścieżki „Strona główna › Dział › Podstrona”. Okruszki pomagają klientowi wrócić do działu, a Google pokazuje je w wynikach zamiast długiego adresu.',
+                    'Włączyć okruszki we wtyczce SEO (Yoast / Rank Math) i wstawić je nad tytułem.', null, [$url]);
+            }
+        }
+
+        return [
+            'kind' => $kind,
+            'phrase' => $phrase ? $source : null,
+            'title' => $title, 'title_len' => $tl,
+            'description' => $desc, 'description_len' => $dl,
+            'h1' => array_map(fn ($h) => $h['text'], $h1s),
+            'words' => $words,
+            'links_in_content' => $home ? null : count($targets ?? []),
+            'noindex' => ! empty($s['noindex']),
+            'canonical_other' => $canonOther ? $canonical : null,
+        ];
+    }
+
+    private const OFFER_URL = '~/(oferta|oferty|uslug|usług|specjalizac|zakres|services?|praktyk|obszar|specjalnosc|kompetenc)~iu';
+
+    /** Usługa z menu / linków strony, która najlepiej pasuje do tematu artykułu. */
+    private function matchingOffer(array $pages, string $topic): ?array
+    {
+        $topicWords = $this->words(str_replace(['-', '_', '/'], ' ', $topic));
+        $best = null;
+        $bestScore = 0.0;
+        foreach ($pages as $p) {
+            foreach ($p['links'] as $l) {
+                if (! $l['internal'] || ! $l['abs'] || ! preg_match(self::OFFER_URL, rawurldecode($l['abs'])) || trim((string) parse_url($l['abs'], PHP_URL_PATH), '/') === '' || substr_count(trim((string) parse_url($l['abs'], PHP_URL_PATH), '/'), '/') < 1) {
+                    continue;
+                }
+                $slug = str_replace(['-', '_'], ' ', basename(rawurldecode((string) parse_url($l['abs'], PHP_URL_PATH))).' '.$l['text']);
+                $score = $this->coverage($this->words($slug), implode(' ', $topicWords));
+                if ($score > $bestScore) {
+                    [$best, $bestScore] = [['text' => $l['text'] ?: basename((string) parse_url($l['abs'], PHP_URL_PATH)), 'url' => $l['abs']], $score];
+                }
+            }
+        }
+
+        return $bestScore >= 0.3 ? $best : null;
+    }
+
+    /** Dwie wskazane podstrony o tym samym temacie konkurują ze sobą w Google. */
+    private function checkCannibal(array $pages): void
+    {
+        $list = array_values($pages);
+        for ($i = 0; $i < count($list); $i++) {
+            for ($j = $i + 1; $j < count($list); $j++) {
+                $a = $this->words($list[$i]['seo_card']['phrase']);
+                $b = $this->words($list[$j]['seo_card']['phrase']);
+                if (count($a) >= 2 && count($b) >= 2 && $this->coverage($a, implode(' ', $b)) >= 0.8 && $this->coverage($b, implode(' ', $a)) >= 0.8) {
+                    $this->add('site', 'page', 'SEO i fraza kluczowa', 'srednie', 'Dwie podstrony walczą o tę samą frazę',
+                        'Podstrony „'.$list[$i]['label'].'” i „'.$list[$j]['label'].'” mają praktycznie ten sam temat w H1/tytule („'.$list[$i]['seo_card']['phrase'].'”). Google zwykle pokazuje tylko jedną z nich i potrafi je zamieniać – obie pozycjonują się słabiej.',
+                        'Rozdzielić tematy (każda podstrona inna fraza, np. ogólna usługa vs. konkretny przypadek) i podlinkować je wzajemnie albo połączyć w jedną.', null,
+                        [$list[$i]['final_url'], $list[$j]['final_url']]);
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ pomocnicze
 
     /** Nazwa wskazanej podstrony w raporcie: początek tytułu strony (bez nazwy firmy po myślniku), a gdy go brak – końcówka adresu. */
+    /** Baner / okno zgody na cookies (CMP) – to nie jest treść podstrony. */
+    private function isConsent(DOMNode $n, ?string $text = null): bool
+    {
+        if ($text !== null && preg_match('/pliki? cookie|plików cookie|cookies|dostawc\w* .{0,80}reklam|partner\w* .{0,40}(reklam|zgod)|uzasadnion\w+ interes/iu', $text)) {
+            return true;
+        }
+        for ($p = $n; $p instanceof DOMElement; $p = $p->parentNode) {
+            if (preg_match('/cookie|consent|gdpr|cmplz|\bcky-|onetrust|didomi|usercentrics|\bfc-|qc-cmp|iubenda|klaro|borlabs|\bcmp\b|cmp-/i', $p->getAttribute('id').' '.$p->getAttribute('class'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function keyLabel(string $url, ?string $title): string
     {
         $name = trim((string) preg_split('/\s+[–—|»·-]\s+/u', (string) $title)[0]);
@@ -1216,7 +1655,7 @@ class PageInspector
             $name = trim(str_replace(['-', '_', ','], ' ', (string) preg_replace('/\.(html?|php|aspx?)$/i', '', basename($path) ?: $path)));
         }
 
-        return $name !== '' ? mb_strimwidth($name, 0, 64, '…') : $url;
+        return $name !== '' ? mb_strimwidth($name, 0, 110, '…') : $url;
     }
 
     private function add(string $page, string $section, string $group, string $sev, string $title, string $text, ?string $fix = null, ?string $evidence = null, array $urls = [], bool $verify = false): void

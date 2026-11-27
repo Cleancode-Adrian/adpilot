@@ -61,7 +61,7 @@ class WebAuditController extends Controller
             'batch' => $audit->batch?->only(['id', 'name']),
             'has_ai' => (bool) config('adpilot.ai.api_key'),
             'audit' => $audit->makeHidden('report'),
-            'report' => $this->report($audit),
+            'report' => $this->report($audit), 'internal' => (bool) $audit->audit_batch_id, // audyt z listy stron = raport wewnętrzny (bez rzeczy „na zielono”)
             'areas' => WebAuditor::AREAS,
             'public_url' => route('public.web-audit', $audit->token),
             'pdf_url' => route('public.web-audit.pdf', $audit->token),
@@ -122,8 +122,59 @@ class WebAuditController extends Controller
 
     private function viewData(WebAudit $audit, bool $pdf): array
     {
+        $internal = (bool) $audit->audit_batch_id; // audyt z listy stron = raport wewnętrzny (bez rzeczy „na zielono”)
+        $report = $this->report($audit);
+
         return ['audit' => $audit, 'areas' => WebAuditor::AREAS, 'pdf' => $pdf, 'brand' => Setting::brand(), 'agency' => Setting::brand()['name'],
-            'report' => $this->report($audit),
+            'report' => $report ? $this->renumber($report, $internal) : null, 'internal' => $internal,
             'pdfUrl' => $pdf ? null : route('public.web-audit.pdf', $audit->token)];
+    }
+
+    /**
+     * Numeracja działów i uwag bez luk – po ukryciu działów, które w raporcie nie mają czego pokazać
+     * (w raporcie wewnętrznym: działy bez uwag, które nie są podstronami). Numery uwag w planie i checkliście idą za nimi.
+     */
+    private function renumber(array $r, bool $internal): array
+    {
+        $pageRoles = array_column($r['pages'] ?? [], 'role');
+        $map = [];
+        $sections = [];
+        foreach ($r['sections'] ?? [] as $s) {
+            if ($internal && ! $s['groups'] && ! in_array($s['key'], $pageRoles, true)) {
+                continue;
+            }
+            $s['num'] = count($sections) + 1;
+            $i = 0;
+            foreach ($s['groups'] as &$g) {
+                foreach ($g['findings'] as &$f) {
+                    $map[(string) $f['id']] = $s['num'].'.'.(++$i);
+                    $f['id'] = $map[(string) $f['id']];
+                }
+                unset($f);
+            }
+            unset($g);
+            $sections[] = $s;
+        }
+        $fix = function ($v) use (&$fix, $map) {
+            if (is_string($v)) {
+                return preg_replace_callback('/\((\d+\.\d+)\)/', fn ($m) => '('.($map[$m[1]] ?? $m[1]).')', $v);
+            }
+            if (! is_array($v)) {
+                return $v;
+            }
+            foreach ($v as $k => $item) {
+                $v[$k] = $k === 'id' && is_string($item) ? ($map[$item] ?? $item) : (in_array($k, ['url', 'urls', 'evidence', 'text', 'fix'], true) ? $item : $fix($item));
+            }
+
+            return $v;
+        };
+        foreach ($r as $k => $v) {
+            if (in_array($k, ['plan', 'checklist', 'top', 'proposals'], true)) {
+                $r[$k] = $fix($v);
+            }
+        }
+        $r['sections'] = $sections;
+
+        return $r;
     }
 }

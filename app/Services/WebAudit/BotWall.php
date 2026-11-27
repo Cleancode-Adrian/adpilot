@@ -20,7 +20,8 @@ class BotWall
         'Wordfence' => ['Wordfence', 'wfwaf-'],
         'zabezpieczenie hostingu' => ['Please wait while your request is being verified', 'One moment, please...', 'Checking your browser before accessing',
             'Your request is being verified', 'Verifying you are human', 'Please enable JavaScript and cookies to continue', 'Trwa weryfikacja', 'Sprawdzanie przeglądarki',
-            '/__nodea/', '<title>Weryfikacja', '<title>Verification', '<title>Security check', '<title>Checking your browser'],
+            '/__nodea/', '<title>Weryfikacja', '<title>Verification', '<title>Security check', '<title>Checking your browser',
+            '<title>Proszę czekać', '<title>Chwileczkę', '<title>Jedną chwilę'],
     ];
 
     /** Nazwa zabezpieczenia albo null, gdy to zwykła strona. */
